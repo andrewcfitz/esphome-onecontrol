@@ -505,8 +505,9 @@ fault, and it affects every node, not just yours.
 ## 9. Unofficial
 
 This project is not affiliated with, endorsed by, or supported by Lippert
-Components, OneControl, or Brinkley RV. All product names and trademarks belong
-to their respective owners.
+Components, OneControl, Grand Design (the coach it was developed on), Brinkley
+RV, or any other RV manufacturer using this hardware. All product names and
+trademarks belong to their respective owners.
 
 It was worked out by reverse-engineering, it talks to systems in a vehicle, and
 it comes with no warranty of any kind. Use it at your own risk.
