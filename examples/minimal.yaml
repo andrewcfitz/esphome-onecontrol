@@ -24,7 +24,7 @@ ota:
 packages:
   onecontrol:
     url: https://github.com/andrewcfitz/esphome-onecontrol
-    ref: v1
+    ref: v1.1
     files:
       - boards/waveshare-esp32-s3-rs485-can.yaml
       - core.yaml
