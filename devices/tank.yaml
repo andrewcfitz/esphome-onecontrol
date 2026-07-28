@@ -10,7 +10,7 @@
 substitutions:
   dev_id: unset
   dev_name: unset
-  dev_addr: "0x00"
+  dev_addr: unset
   dev_icon: "mdi:cup-water"
 
 sensor:

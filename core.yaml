@@ -17,8 +17,14 @@
 #   ID = (type & 0x1C) << 24 | src << 18 | (type & 3) << 16 | dst << 8 | data
 #   128 = REQUEST, 129 = RESPONSE, 130 = COMMAND
 #
-# We transmit as source 0xA0, which was unused on the coach this was built
-# on. Pick a free one.  All multi-byte fields are big-endian.
+# We transmit as source 0xA0, which was unused on the coach this was built on.
+# It is FIXED in this package, not a substitution: 0xA0 is baked into the
+# transmitted frame IDs and into the receive filters that match replies aimed
+# at us, here and in battery.yaml. If your coach has a real node at 0xA0, this
+# board impersonates it and neither of you will enjoy it. discover.yaml will
+# tell you. See the README.
+#
+# All multi-byte fields are big-endian.
 #
 # The important bit: a device only obeys a COMMAND from the client holding an
 # open REMOTE_CONTROL session. A replayed command frame does nothing at all.

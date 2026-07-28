@@ -70,11 +70,29 @@ the translation into a smart-home toggle.
 I run awning controls on my own coach. I know what they take. I have
 deliberately not published them.
 
-This package cannot move anything, and that is a property you can check rather
-than a promise you have to take. Read `core.yaml`: there is one command path,
-and it sends either a light command or a relay on/off. The motor device type
-appears in exactly one YAML file, `discover.yaml`, in a lookup table whose only
-job is to tell you which addresses to leave alone.
+Nothing here targets a motor. There is one command path, in `core.yaml`, and it
+sends either a light command or a relay on or off. The motor device type appears
+in exactly one YAML file, `discover.yaml`, in a lookup table whose only job is to
+tell you which addresses to leave alone.
+
+**That is not the same as saying this package cannot move anything.** A relay ON
+is an empty payload with `1` in the message-data byte of the CAN ID. A momentary
+H-bridge motor reads exactly that frame as FORWARD. The motor classes derive from
+the relay class and inherit its command convention unchanged, so there is no
+discriminator on the wire and there is none in this code either. The only thing
+standing between you and a moving slide is the hex string you typed into
+`dev_addr`.
+
+So: check every address against `discover.yaml`'s output. Do not guess one, do
+not copy one, and do not assume an address that produced no visible effect is
+harmless.
+
+If it happens, the damage is limited but not by design. The command path opens a
+session, sends, and closes, and ending the session is itself a stop on a
+momentary H-bridge, so the motor moves for a few tens of milliseconds. Repeated
+toggles ratchet it further each time. Treat that as a description of the failure
+mode, not as a safety feature. It is neither guaranteed by this code nor
+something to lean on.
 
 ## 3. Hardware
 
@@ -226,7 +244,17 @@ worth having whether or not this project knows its name.
 
 Nodes that broadcast no function name at all are skipped rather than printed as
 noise, so your lights will not all be in that list. Those you find the hard way:
-toggle one from the phone app, watch which address changes, write it down.
+toggle one from the phone app, watch which address changes, write it down. That
+is the only sanctioned alternative to discovery. It is not permission to guess.
+
+**If discovery prints a node at `0xA0`, stop and open an issue.** That is the
+source address this package transmits as, and it is fixed: `0xA0` is baked into
+the frame IDs it sends and into the receive filters that decide which replies
+are ours, in both `core.yaml` and `battery.yaml`. There is no substitution for
+it, so a consumer pinning `ref: v1` cannot change it. Sharing it with a real node
+means your board is impersonating that node: sessions get attributed to the wrong
+device, and lights intermittently do not respond with nothing in the log to say
+why. The coach this was built on had `0xA0` free. Yours might not.
 
 **5. Write your device list.** One entry per device in the `files:` list,
 picking the right file from section 6. `examples/coach.yaml` shows a complete
@@ -269,7 +297,13 @@ of them take:
 | `dev_addr` | Node address as a quoted hex string, e.g. `"0x0A"`. |
 | `dev_icon` | An `mdi:` icon. |
 
-Find `dev_addr` with `discover.yaml`. Do not guess it.
+Find `dev_addr` with `discover.yaml`. Do not guess it: a relay command and a
+motor's FORWARD command are the same frame, so a wrong address is not
+necessarily a harmless one. See section 2.
+
+Discovery does not list nodes that broadcast no function name, so a device you
+own may be missing from the log. That is a known gap, not a fault. Find those by
+toggling one from the phone app and watching which address changes.
 
 ### Which light file
 

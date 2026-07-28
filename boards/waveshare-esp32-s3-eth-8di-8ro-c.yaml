@@ -2,6 +2,12 @@
 # 16MB flash, 7-36V screw terminal, wired Ethernet, 8 relays, 8 isolated
 # inputs. CAN on GPIO17 (TX) and GPIO18 (RX), isolated.
 #
+# Termination is a hardware setting on the board, not something this file can
+# configure. Terminate only if this board replaced a terminator or sits at a
+# physical end of the bus. For the leveler-port tap documented in the README,
+# where a terminating plug came out to make room, the answer is: terminate. See
+# the README's termination section before you decide.
+#
 # The relays and inputs are yours to configure; this file only sets up the
 # processor, the CAN pins and the Ethernet PHY.
 substitutions:

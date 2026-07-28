@@ -5,7 +5,15 @@
 #         dev_addr  node address as hex, e.g. "0x0A"
 #         dev_icon  mdi icon
 #
-# Find dev_addr by including discover.yaml and reading the log. Do not guess.
+# Find dev_addr by including discover.yaml and reading the log. Do not guess:
+# a MOMENTARY_H_BRIDGE_TYPE_2 or MOMENTARY_RELAY_TYPE_2 node derives from the
+# relay class and accepts the identical command frame, an empty payload with the
+# command in the message data byte of the ID. Point this file at one of those by
+# mistake and it does not fail, it drives a slide or an awning.
+#
+# Note that discover.yaml only logs nodes that broadcast a function name. A
+# light that does not appear there is found by toggling it from the phone app
+# and watching which address changes, not by guessing.
 #
 # Use this and not dimmable_light.yaml for any fixture that does not really
 # dim, whatever its DEVICE_TYPE says. DIMMABLE_LIGHT describes the DRIVER.
@@ -13,7 +21,7 @@
 substitutions:
   dev_id: unset
   dev_name: unset
-  dev_addr: "0x00"
+  dev_addr: unset
   dev_icon: "mdi:lightbulb"
 
 light:

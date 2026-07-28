@@ -11,7 +11,7 @@
 substitutions:
   dev_id: unset
   dev_name: unset
-  dev_addr: "0x00"
+  dev_addr: unset
   dev_icon: "mdi:lightbulb"
 
 globals:
@@ -137,6 +137,13 @@ canbus:
               id(${dev_id}_state).publish_state(x[0] != 0);
               if (x.size() > 1) id(${dev_id}_level).publish_state(x[1]);
 
+      # Somebody else commanding this node. Note this one does NOT set
+      # bus_level_* first, unlike the trigger above where the ordering is
+      # load-bearing. That is intentional and is not a bug: the level published
+      # here can fail the echo guard and go back out as a fresh command, which
+      # is idempotent (the node is already going there) and costs one spare
+      # session when the phone app dims a fixture. Left exactly as the config
+      # this was extracted from had it.
       - can_id: 0x00020000
         can_id_mask: 0x00030000
         use_extended_id: true
