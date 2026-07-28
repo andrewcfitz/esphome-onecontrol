@@ -1,0 +1,23 @@
+# Waveshare ESP32-S3-ETH-8DI-8RO-C.
+# 16MB flash, 7-36V screw terminal, wired Ethernet, 8 relays, 8 isolated
+# inputs. CAN on GPIO17 (TX) and GPIO18 (RX), isolated.
+#
+# The relays and inputs are yours to configure; this file only sets up the
+# processor, the CAN pins and the Ethernet PHY.
+substitutions:
+  can_tx_pin: GPIO17
+  can_rx_pin: GPIO18
+
+esp32:
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: arduino
+
+ethernet:
+  clk_pin: GPIO15
+  cs_pin: GPIO16
+  interrupt_pin: GPIO12
+  miso_pin: GPIO14
+  mosi_pin: GPIO13
+  type: W5500

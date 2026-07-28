@@ -1,0 +1,7 @@
+# Compile harness. Not an example, not for flashing.
+esphome:
+  name: t-core
+logger:
+packages:
+  board: !include ../boards/waveshare-esp32-s3-rs485-can.yaml
+  core: !include ../core.yaml
