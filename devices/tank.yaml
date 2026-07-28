@@ -1,0 +1,40 @@
+# One OneControl tank level sensor.
+#
+#   vars: dev_id / dev_name / dev_addr / dev_icon, as relay_light.yaml
+#
+# TANK_SENSOR nodes broadcast DEVICE_STATUS on 0x300|addr. No session, no
+# polling, no request: they just talk, 1 Hz idle and ~333ms on change.
+#
+# Expect coarse numbers. These report in 33% steps, the classic
+# three-segment probe. 33 is one segment wet, not a precise third.
+substitutions:
+  dev_id: unset
+  dev_name: unset
+  dev_addr: "0x00"
+  dev_icon: "mdi:cup-water"
+
+sensor:
+  - platform: template
+    id: ${dev_id}
+    name: ${dev_name}
+    unit_of_measurement: "%"
+    state_class: measurement
+    accuracy_decimals: 0
+    icon: ${dev_icon}
+    update_interval: never
+
+canbus:
+  - id: !extend can_bus
+    on_frame:
+      # [0] percent full, [1] battery, [2] quality, [3][4] tilt, [5] alert.
+      # Bit 7 of byte 0 is reserved and masked off.
+      - can_id: 0x300
+        can_id_mask: 0x700
+        use_extended_id: false
+        then:
+          - lambda: |-
+              if ((can_id & 0xFF) != ${dev_addr}) return;
+              if (x.empty()) return;
+              float pct = x[0] & 0x7F;
+              if (pct > 100) pct = 100;
+              id(${dev_id}).publish_state(pct);
