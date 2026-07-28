@@ -1,0 +1,94 @@
+# One OneControl DIMMABLE_LIGHT node whose FIXTURE cannot dim.
+#
+#   vars: dev_id / dev_name / dev_addr / dev_icon, as relay_light.yaml
+#
+# The awkward middle case, and a real one. DEVICE_TYPE 20 DIMMABLE_LIGHT
+# describes the DRIVER. On the coach this was built from, the Soffit driver
+# accepts brightness happily and the fixture strobes on anything below full.
+# So the entity is on/off, with no slider to drag, but the commands on the
+# wire are still the dimmable form the node expects: an 8-byte payload, not
+# the empty-payload form a latching relay takes. Put such a fixture on
+# relay_light.yaml instead and it stops responding altogether, because the
+# node silently discards a command in the wrong form.
+#
+# The level sensor is kept as a diagnostic. It is how you find out that a
+# fixture does not really dim, and it is how the next person will.
+substitutions:
+  dev_id: unset
+  dev_name: unset
+  dev_addr: "0x00"
+  dev_icon: "mdi:lightbulb"
+
+light:
+  - platform: binary
+    id: ${dev_id}_light
+    name: ${dev_name}
+    icon: ${dev_icon}
+    output: ${dev_id}_out
+    restore_mode: ALWAYS_OFF
+
+output:
+  - platform: template
+    id: ${dev_id}_out
+    type: binary
+    write_action:
+      - lambda: |-
+          if (!id(light_ready) || id(light_sync)) return;
+          // dimmer = true, unlike relay_light.yaml. This node speaks the
+          // 8-byte dimmable payload even though we only ever send it on or
+          // off. The relay form would be discarded.
+          id(light_cmd)->execute(${dev_addr}, state, true, 100);
+
+binary_sensor:
+  - platform: template
+    id: ${dev_id}_state
+    name: ${dev_name} State
+    device_class: light
+    entity_category: diagnostic
+    on_state:
+      - lambda: |-
+          if (id(${dev_id}_light).remote_values.is_on() == x) return;
+          id(light_sync) = true;
+          auto c = x ? id(${dev_id}_light).turn_on() : id(${dev_id}_light).turn_off();
+          c.perform();
+          id(light_sync) = false;
+
+sensor:
+  # Byte 1 of the node's report, 0-100. No on_value, unlike
+  # dimmable_light.yaml: there is no slider to push it back into. It is here
+  # as evidence, not as a feedback path.
+  - platform: template
+    id: ${dev_id}_level
+    name: ${dev_name} Level
+    unit_of_measurement: "%"
+    state_class: measurement
+    accuracy_decimals: 0
+    icon: mdi:brightness-percent
+    entity_category: diagnostic
+    update_interval: never
+
+canbus:
+  - id: !extend can_bus
+    on_frame:
+      # Dimmable payload: [0] mode (0 = off), [1] brightness 0-100. Note this
+      # is not the relay file's (x[0] & 0x0F) == 1: same wire, different
+      # device class, different meaning for byte 0.
+      - can_id: 0x300
+        can_id_mask: 0x700
+        use_extended_id: false
+        then:
+          - lambda: |-
+              if ((can_id & 0xFF) != ${dev_addr}) return;
+              if (x.empty()) return;
+              id(${dev_id}_state).publish_state(x[0] != 0);
+              if (x.size() > 1) id(${dev_id}_level).publish_state(x[1]);
+
+      - can_id: 0x00020000
+        can_id_mask: 0x00030000
+        use_extended_id: true
+        then:
+          - lambda: |-
+              if (((can_id >> 8) & 0xFF) != ${dev_addr}) return;
+              if (x.empty()) return;
+              id(${dev_id}_state).publish_state(x[0] != 0);
+              if (x.size() > 1) id(${dev_id}_level).publish_state(x[1]);

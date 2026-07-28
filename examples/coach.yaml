@@ -38,9 +38,10 @@ packages:
         vars: {dev_id: awning_2, dev_name: Awning 2, dev_addr: "0x62", dev_icon: "mdi:awning-outline"}
       - path: devices/dimmable_light.yaml
         vars: {dev_id: pendants, dev_name: Kitchen Pendants, dev_addr: "0x95", dev_icon: "mdi:ceiling-light"}
-      # Soffit is DIMMABLE_LIGHT on the bus and strobes if you dim it, so it
-      # gets the relay file. The driver dims; the fixture does not.
-      - path: devices/relay_light.yaml
+      # Soffit is DIMMABLE_LIGHT on the bus and its fixture strobes if you
+      # dim it, so it gets an on/off entity that still speaks the dimmable
+      # command form. The driver dims; the fixture does not.
+      - path: devices/dimmable_light_switched.yaml
         vars: {dev_id: soffit, dev_name: Soffit, dev_addr: "0xBC", dev_icon: "mdi:light-flood-down"}
       - path: devices/relay_light.yaml
         vars: {dev_id: hutch, dev_name: Hutch, dev_addr: "0x0A", dev_icon: "mdi:cupboard-outline"}

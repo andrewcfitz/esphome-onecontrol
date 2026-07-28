@@ -23,7 +23,7 @@ packages:
     file: ../devices/dimmable_light.yaml
     vars: {dev_id: pendants, dev_name: Kitchen Pendants, dev_addr: "0x95", dev_icon: "mdi:ceiling-light"}
   soffit: !include
-    file: ../devices/relay_light.yaml
+    file: ../devices/dimmable_light_switched.yaml
     vars: {dev_id: soffit, dev_name: Soffit, dev_addr: "0xBC", dev_icon: "mdi:light-flood-down"}
   hutch: !include
     file: ../devices/relay_light.yaml
