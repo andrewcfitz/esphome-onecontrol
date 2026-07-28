@@ -1,0 +1,148 @@
+# One OneControl DIMMABLE_LIGHT node that really dims. Include once per
+# fixture.
+#
+#   vars: dev_id / dev_name / dev_addr / dev_icon, as relay_light.yaml
+#
+# Test the fixture before choosing this file. DEVICE_TYPE 20 DIMMABLE_LIGHT
+# is what the DRIVER supports, not what the FIXTURE can do. On the coach this
+# was built from, the Soffit accepts brightness happily and then strobes on
+# anything below full, while the pendants dim properly. Only your coach can
+# tell you which is which. If it strobes, use relay_light.yaml instead.
+substitutions:
+  dev_id: unset
+  dev_name: unset
+  dev_addr: "0x00"
+  dev_icon: "mdi:lightbulb"
+
+globals:
+  # The last brightness this node REPORTED, 0 when off. This stops the light
+  # chasing its own reflection, and it fixed a real fault: turning the
+  # pendants on made them flash on and off instead of fading up.
+  #
+  # The loop: the fixture fades rather than snapping, and reports its
+  # brightness on the way up. Each report differed from the target, so the
+  # level sensor's on_value pushed it into the light entity, whose output
+  # transmitted it as a NEW command, restarting the fade. When an intermediate
+  # report read 0, the output turned that into an actual OFF.
+  #
+  # light_sync was meant to prevent this and cannot, for a reason worth
+  # knowing if you build anything two-way on ESPHome: LightCall::perform()
+  # does NOT write the output, it only sets a flag, and LightState::loop()
+  # does the write on a later iteration. So
+  # `light_sync = true; perform(); light_sync = false;` always clears the flag
+  # BEFORE the write it guards. Any instantaneous flag loses that race.
+  #
+  # Comparing against the value the bus last reported is timing-independent
+  # instead: a brightness that came from the node is never sent back to it.
+  - id: bus_level_${dev_id}
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+light:
+  - platform: monochromatic
+    id: ${dev_id}_light
+    name: ${dev_name}
+    icon: ${dev_icon}
+    output: ${dev_id}_out
+    restore_mode: ALWAYS_OFF
+    # 0s, not the 1s default. A transition re-runs the output on every step of
+    # the fade, and each step here is a full session handshake plus command
+    # frame. One slider drag would put dozens of sessions on the bus.
+    default_transition_length: 0s
+    # 1.0, not the 2.8 default. Gamma correction makes a raw LED look linear;
+    # this protocol takes a plain percentage and the node applies its own
+    # curve. Correcting twice would make 50% arrive as 14.
+    gamma_correct: 1.0
+
+output:
+  - platform: template
+    id: ${dev_id}_out
+    type: float
+    write_action:
+      - lambda: |-
+          if (!id(light_ready) || id(light_sync)) return;
+          int lvl = (int) lroundf(state * 100.0f);
+          if (lvl > 100) lvl = 100;
+          if (lvl < 0) lvl = 0;
+          // Echo guard: if this level is the one the node just told us, it
+          // came FROM the bus and must not go back to it. Re-commanding a
+          // fixture mid-fade restarts the fade, which made the pendants flash
+          // instead of ramping. See bus_level_* in globals.
+          if (lvl == id(bus_level_${dev_id})) return;
+          id(light_cmd)->execute(${dev_addr}, lvl > 0, true, lvl > 0 ? lvl : 100);
+
+binary_sensor:
+  - platform: template
+    id: ${dev_id}_state
+    name: ${dev_name} State
+    device_class: light
+    entity_category: diagnostic
+    on_state:
+      - lambda: |-
+          if (id(${dev_id}_light).remote_values.is_on() == x) return;
+          id(light_sync) = true;
+          auto c = id(${dev_id}_light).make_call();
+          c.set_state(x);
+          if (x && id(${dev_id}_level).has_state()) {
+            float b = id(${dev_id}_level).state / 100.0f;
+            if (b > 0 && b <= 1) c.set_brightness(b);
+          }
+          c.perform();
+          id(light_sync) = false;
+
+sensor:
+  # Byte 1 of the node's report, 0-100. A diagnostic as well as the feedback
+  # path: it is the only direct evidence of whether a fixture really dims or
+  # merely reports 100 whenever it is on.
+  - platform: template
+    id: ${dev_id}_level
+    name: ${dev_name} Level
+    unit_of_measurement: "%"
+    state_class: measurement
+    accuracy_decimals: 0
+    icon: mdi:brightness-percent
+    entity_category: diagnostic
+    update_interval: never
+    on_value:
+      - lambda: |-
+          if (!id(${dev_id}_light).remote_values.is_on()) return;
+          float b = x / 100.0f;
+          if (b < 0) b = 0;
+          if (b > 1) b = 1;
+          if (fabsf(id(${dev_id}_light).remote_values.get_brightness() - b) < 0.005f) return;
+          id(light_sync) = true;
+          auto c = id(${dev_id}_light).make_call();
+          c.set_brightness(b);
+          c.perform();
+          id(light_sync) = false;
+
+canbus:
+  - id: !extend can_bus
+    on_frame:
+      # Dimmable payload: [0] mode (0 = off), [1] brightness 0-100.
+      #
+      # bus_level_* MUST be set before publish_state. Publishing runs on_value
+      # synchronously, which updates the light and queues an output write, and
+      # the output compares against this. Setting it after would leave the
+      # guard reading last second's value.
+      - can_id: 0x300
+        can_id_mask: 0x700
+        use_extended_id: false
+        then:
+          - lambda: |-
+              if ((can_id & 0xFF) != ${dev_addr}) return;
+              if (x.empty()) return;
+              id(bus_level_${dev_id}) = (x[0] != 0 && x.size() > 1) ? x[1] : 0;
+              id(${dev_id}_state).publish_state(x[0] != 0);
+              if (x.size() > 1) id(${dev_id}_level).publish_state(x[1]);
+
+      - can_id: 0x00020000
+        can_id_mask: 0x00030000
+        use_extended_id: true
+        then:
+          - lambda: |-
+              if (((can_id >> 8) & 0xFF) != ${dev_addr}) return;
+              if (x.empty()) return;
+              id(${dev_id}_state).publish_state(x[0] != 0);
+              if (x.size() > 1) id(${dev_id}_level).publish_state(x[1]);
