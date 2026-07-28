@@ -1,0 +1,7 @@
+esphome:
+  name: t-battery
+logger:
+packages:
+  board: !include ../boards/waveshare-esp32-s3-rs485-can.yaml
+  core: !include ../core.yaml
+  battery: !include ../battery.yaml

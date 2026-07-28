@@ -1,0 +1,77 @@
+# Battery voltage, read from whichever module will answer for it.
+#
+# Optional. Include it once. Nothing else depends on it.
+#
+# The three candidate addresses below are the coach this was built on:
+# 0xD1 CHASSIS_INFO, 0xCF GENERATOR_GENIE, 0x72 LEVELER. Yours may differ,
+# or you may have none of them, in which case the sensor stays unknown and
+# nothing else breaks. Run discover.yaml to see what you have.
+globals:
+  - id: volt_src        # which node battery voltage is being read from
+    type: int
+    restore_value: no
+    initial_value: '0'
+
+sensor:
+  - platform: template
+    id: battery_voltage
+    name: Battery Voltage
+    unit_of_measurement: V
+    device_class: voltage
+    state_class: measurement
+    accuracy_decimals: 2
+    update_interval: never
+
+interval:
+  # All three candidates are asked every time rather than probing until one
+  # sticks, so a late or absent chassis module is not fatal.
+  - interval: 30s
+    then:
+      - lambda: |-
+          const uint8_t srcs[] = {0xD1, 0xCF, 0x72};
+          std::vector<uint8_t> p = {0x00, 43};
+          for (uint8_t s : srcs) {
+            id(can_bus).send_data(0x02800011u | ((uint32_t) s << 8), true, p);
+          }
+
+canbus:
+  - id: !extend can_bus
+    on_frame:
+      # PID 43 is BATTERY_VOLTAGE, UnsignedBigEndian16x16 fixed point, i.e.
+      # divide by 65536. Confirmed against a real captured exchange:
+      #   0x01718511 #00:2B:0D:7F:F3  ->  0x0D7FF3 / 65536 = 13.500 V
+      # Note that reply carries three value bytes, not the four a UINT32
+      # implies: the leading zero is not sent. So take the width from the DLC.
+      - can_id: 0x0001A011
+        can_id_mask: 0x0003FFFF
+        use_extended_id: true
+        then:
+          - lambda: |-
+              if (x.size() < 3) return;
+              if (((x[0] << 8) | x[1]) != 43) return;
+              uint8_t src = (can_id >> 18) & 0xFF;
+              size_t n = x.size() - 2;
+              if (n > 4) n = 4;
+              uint32_t raw = 0;
+              for (size_t i = 0; i < n; i++) raw = (raw << 8) | x[2 + i];
+              float v = raw / 65536.0f;
+              if (v < 5.0f || v > 60.0f) {
+                ESP_LOGW("can.volt", "implausible %.3f V from 0x%02X", v, (unsigned) src);
+                return;
+              }
+              // Prefer the chassis module, then generator, then leveler, so
+              // the reading sticks with one source instead of alternating.
+              auto prio = [](uint8_t a) -> int {
+                switch (a) {
+                  case 0xD1: return 3;  // CHASSIS_INFO
+                  case 0xCF: return 2;  // GENERATOR_GENIE
+                  case 0x72: return 1;  // LEVELER
+                  default:   return 0;
+                }
+              };
+              if (prio(src) == 0 || prio(src) < prio(id(volt_src))) return;
+              if (src != id(volt_src)) {
+                ESP_LOGI("can.volt", "battery voltage sourced from 0x%02X", (unsigned) src);
+                id(volt_src) = src;
+              }
+              id(battery_voltage).publish_state(v);
