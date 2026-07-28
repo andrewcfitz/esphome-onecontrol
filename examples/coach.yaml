@@ -1,0 +1,75 @@
+# A complete coach: eight lights, five tanks, water pump, tank heater and
+# battery voltage, on a Waveshare ESP32-S3-ETH-8DI-8RO-C.
+#
+# THE ADDRESSES BELOW ARE ONE SPECIFIC COACH'S. Yours will differ. Add
+# discover.yaml to the files list, flash, read the log, and replace them.
+#
+# There are no awning or slide controls here, and that is deliberate. See
+# the README section "Why there are no motor controls".
+esphome:
+  name: rv-canbus
+  friendly_name: RV
+
+logger:
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+
+packages:
+  onecontrol:
+    url: https://github.com/andrewcfitz/esphome-onecontrol
+    ref: v1
+    files:
+      - boards/waveshare-esp32-s3-eth-8di-8ro-c.yaml
+      - core.yaml
+      - battery.yaml
+
+      # Uncomment to find your own addresses, then comment it out again.
+      # - discover.yaml
+
+      # ---- Lights ------------------------------------------------------
+      - path: devices/dimmable_light.yaml
+        vars: {dev_id: awning_1, dev_name: Awning 1, dev_addr: "0x3F", dev_icon: "mdi:awning-outline"}
+      - path: devices/dimmable_light.yaml
+        vars: {dev_id: awning_2, dev_name: Awning 2, dev_addr: "0x62", dev_icon: "mdi:awning-outline"}
+      - path: devices/dimmable_light.yaml
+        vars: {dev_id: pendants, dev_name: Kitchen Pendants, dev_addr: "0x95", dev_icon: "mdi:ceiling-light"}
+      # Soffit is DIMMABLE_LIGHT on the bus and its fixture strobes if you
+      # dim it, so it gets an on/off entity that still speaks the dimmable
+      # command form. The driver dims; the fixture does not.
+      - path: devices/dimmable_light_switched.yaml
+        vars: {dev_id: soffit, dev_name: Soffit, dev_addr: "0xBC", dev_icon: "mdi:light-flood-down"}
+      - path: devices/relay_light.yaml
+        vars: {dev_id: hutch, dev_name: Hutch, dev_addr: "0x0A", dev_icon: "mdi:cupboard-outline"}
+      - path: devices/relay_light.yaml
+        vars: {dev_id: island, dev_name: Island Toe Kick, dev_addr: "0xFB", dev_icon: "mdi:led-strip"}
+      - path: devices/relay_light.yaml
+        vars: {dev_id: scare, dev_name: Scare, dev_addr: "0xF4", dev_icon: "mdi:car-light-high"}
+      - path: devices/relay_light.yaml
+        vars: {dev_id: underbody, dev_name: Underbody Accent, dev_addr: "0x73", dev_icon: "mdi:led-strip-variant"}
+
+      # ---- Switches ----------------------------------------------------
+      - path: devices/relay_switch.yaml
+        vars: {dev_id: water_pump, dev_name: Water Pump, dev_addr: "0x21", dev_icon: "mdi:water-pump", dev_class: running}
+      - path: devices/relay_switch.yaml
+        vars: {dev_id: tank_heater, dev_name: Tank Heater, dev_addr: "0xF2", dev_icon: "mdi:heating-coil", dev_class: heat}
+
+      # ---- Tanks -------------------------------------------------------
+      # Names come from each sensor's own DEVICE_ID broadcast, so they are
+      # the RV's labels rather than mine. The three greys differ only by
+      # function instance, which is all the bus reveals; which physical tank
+      # is which needs a look underneath, or filling one and watching.
+      - path: devices/tank.yaml
+        vars: {dev_id: tank_fresh, dev_name: Fresh Tank, dev_addr: "0xEC", dev_icon: "mdi:cup-water"}
+      - path: devices/tank.yaml
+        vars: {dev_id: tank_grey_1, dev_name: Grey Tank 1, dev_addr: "0xFA", dev_icon: "mdi:dishwasher"}
+      - path: devices/tank.yaml
+        vars: {dev_id: tank_grey_2, dev_name: Grey Tank 2, dev_addr: "0x31", dev_icon: "mdi:dishwasher"}
+      - path: devices/tank.yaml
+        vars: {dev_id: tank_grey_3, dev_name: Grey Tank 3, dev_addr: "0x23", dev_icon: "mdi:dishwasher"}
+      - path: devices/tank.yaml
+        vars: {dev_id: tank_black, dev_name: Black Tank, dev_addr: "0xCD", dev_icon: "mdi:toilet"}

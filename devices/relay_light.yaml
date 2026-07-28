@@ -1,0 +1,101 @@
+# One OneControl light on a latching relay. Include once per fixture.
+#
+#   vars: dev_id    ESPHome id prefix, e.g. hutch
+#         dev_name  Home Assistant name, e.g. Hutch
+#         dev_addr  node address as hex, e.g. "0x0A"
+#         dev_icon  mdi icon
+#
+# Find dev_addr by including discover.yaml and reading the log. Do not guess:
+# a MOMENTARY_H_BRIDGE_TYPE_2 or MOMENTARY_RELAY_TYPE_2 node derives from the
+# relay class and accepts the identical command frame, an empty payload with the
+# command in the message data byte of the ID. Point this file at one of those by
+# mistake and it does not fail, it drives a slide or an awning.
+#
+# Note that discover.yaml only logs nodes that broadcast a function name. A
+# light that does not appear there is found by toggling it from the phone app
+# and watching which address changes, not by guessing.
+#
+# Use this and not dimmable_light.yaml for any fixture that does not really
+# dim, whatever its DEVICE_TYPE says. DIMMABLE_LIGHT describes the DRIVER.
+# A fixture that strobes on anything below full belongs here.
+substitutions:
+  dev_id: unset
+  dev_name: unset
+  dev_addr: unset
+  dev_icon: "mdi:lightbulb"
+
+light:
+  # NOT optimistic: state comes from what the node reports, so a rejected
+  # command springs the entity back within a second instead of lying.
+  #
+  # restore_mode: ALWAYS_OFF is a formality, not a restore. It is simply what
+  # the entity holds for its first second, before its node speaks. The output
+  # is inert for 10s anyway, so it never reaches the wire.
+  - platform: binary
+    id: ${dev_id}_light
+    name: ${dev_name}
+    icon: ${dev_icon}
+    output: ${dev_id}_out
+    restore_mode: ALWAYS_OFF
+
+output:
+  # The transmit half. Both guards matter: light_ready blocks the write
+  # ESPHome performs at boot, light_sync blocks the write caused by pushing
+  # bus state into the entity.
+  - platform: template
+    id: ${dev_id}_out
+    type: binary
+    write_action:
+      - lambda: |-
+          if (!id(light_ready) || id(light_sync)) return;
+          id(light_cmd)->execute(${dev_addr}, state, false, 100);
+
+binary_sensor:
+  # The ground truth, and what makes the light entity honest rather than
+  # optimistic. on_state pushes the node's real state into the light, so a
+  # wall switch or the phone app moves Home Assistant too.
+  #
+  # No lambda and no initial value, so it reads "unknown" until the node
+  # speaks. That is honest: we do not know yet.
+  - platform: template
+    id: ${dev_id}_state
+    name: ${dev_name} State
+    device_class: light
+    entity_category: diagnostic
+    on_state:
+      - lambda: |-
+          if (id(${dev_id}_light).remote_values.is_on() == x) return;
+          id(light_sync) = true;
+          auto c = x ? id(${dev_id}_light).turn_on() : id(${dev_id}_light).turn_off();
+          c.perform();
+          id(light_sync) = false;
+
+canbus:
+  - id: !extend can_bus
+    on_frame:
+      # ---- This node's 1 Hz DEVICE_STATUS -------------------------------
+      # Relay payload: [0] low nibble = output state (1 = on), bit 5 = fault
+      # latch. Self-healing: a dropped frame costs a second, where a missed
+      # command would otherwise leave Home Assistant lying indefinitely.
+      - can_id: 0x300
+        can_id_mask: 0x700
+        use_extended_id: false
+        then:
+          - lambda: |-
+              if ((can_id & 0xFF) != ${dev_addr}) return;
+              if (x.empty()) return;
+              id(${dev_id}_state).publish_state((x[0] & 0x0F) == 1);
+
+      # ---- Somebody else commanding this node ---------------------------
+      # Catches the phone app and wall keypads, so Home Assistant follows
+      # within milliseconds instead of waiting for the next 1 Hz report.
+      # Message data is deliberately NOT matched in the filter: dimmable
+      # lights leave it at 0 and put the command in the payload, relays do the
+      # exact reverse. Pinning it to 0 would miss every relay command.
+      - can_id: 0x00020000
+        can_id_mask: 0x00030000
+        use_extended_id: true
+        then:
+          - lambda: |-
+              if (((can_id >> 8) & 0xFF) != ${dev_addr}) return;
+              id(${dev_id}_state).publish_state((can_id & 0xFF) == 1);

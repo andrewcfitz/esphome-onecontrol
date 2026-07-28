@@ -1,0 +1,219 @@
+# Lippert / OneControl IDS-CAN: the bus, the session handshake, and the
+# command path shared by every device.
+#
+# Requires substitutions can_tx_pin and can_rx_pin. Include one of the
+# files under boards/, or set them yourself.
+#
+# ===========================================================================
+# THE PROTOCOL, in brief
+#
+# IDS-CAN. Not RV-C, not J1939, not CANopen. 250 kbit/s.
+#
+# Broadcast frames, 11-bit ID:
+#   ID = (MESSAGE_TYPE << 8) | source_address
+#   2 = DEVICE_ID (who I am), 3 = DEVICE_STATUS (what I am doing), 7 = TIME
+#
+# Point-to-point frames, 29-bit ID:
+#   ID = (type & 0x1C) << 24 | src << 18 | (type & 3) << 16 | dst << 8 | data
+#   128 = REQUEST, 129 = RESPONSE, 130 = COMMAND
+#
+# We transmit as source 0xA0, which was unused on the coach this was built on.
+# It is FIXED in this package, not a substitution: 0xA0 is baked into the
+# transmitted frame IDs and into the receive filters that match replies aimed
+# at us, here and in battery.yaml. If your coach has a real node at 0xA0, this
+# board impersonates it and neither of you will enjoy it. discover.yaml will
+# tell you. See the README.
+#
+# All multi-byte fields are big-endian.
+#
+# The important bit: a device only obeys a COMMAND from the client holding an
+# open REMOTE_CONTROL session. A replayed command frame does nothing at all.
+# ===========================================================================
+
+esphome:
+  on_boot:
+    priority: -100
+    then:
+      # Let the bus settle before the light entities may transmit. An ESPHome
+      # light writes its state as soon as it starts, which here would command
+      # every light on the coach on every reboot and OTA update. Nodes report
+      # at 1 Hz, so 10s is ample for reality to arrive first.
+      - delay: 10s
+      - globals.set:
+          id: light_ready
+          value: 'true'
+
+globals:
+  # The command currently in flight. The session handshake takes three round
+  # trips, so what we are trying to do has to survive from the button press
+  # until the session opens. One slot only: light_cmd is mode: queued, so
+  # commands serialise instead of trampling each other.
+  - id: cmd_target      # destination node, and the guard for whose reply is whose
+    type: int
+    restore_value: no
+    initial_value: '0'
+  - id: cmd_on
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: cmd_dimmer      # dimmable lights and relays take opposite command forms
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: cmd_level       # brightness 1-100, dimmable only
+    type: int
+    restore_value: no
+    initial_value: '100'
+
+  # Retained because the relay lights reference it, and harmless there: a
+  # relay's echo is a command identical to the state the node is already in,
+  # so it is idempotent rather than visible. NOT load-bearing. What keeps the
+  # relays quiet is the equality check at the top of each on_state handler.
+  - id: light_sync
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+  - id: light_ready
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
+canbus:
+  - platform: esp32_can
+    id: can_bus
+    tx_pin: ${can_tx_pin}
+    rx_pin: ${can_rx_pin}
+    can_id: 0
+    bit_rate: 250kbps
+    # NORMAL, not LISTENONLY: we transmit.
+    mode: NORMAL
+
+    on_frame:
+      # ---- Session handshake -------------------------------------------
+      # A device obeys a COMMAND only from the client holding an open
+      # REMOTE_CONTROL session (SESSION_ID 4). For destination DD:
+      #
+      #   us -> 0x0280DD42  REQUEST 66 SESSION_REQUEST_SEED  [00 04]
+      #   DD -> 0x02F1A042  RESPONSE 66                      [00 04 seed32]
+      #   us -> 0x0280DD43  REQUEST 67 SESSION_TRANSMIT_KEY  [00 04 key32]
+      #   DD -> 0x02F1A043  RESPONSE 67                      session open
+      #   us -> 0x0282DDxx  COMMAND
+      #   us -> 0x0280DD45  REQUEST 69 SESSION_END           [00 04]
+      #
+      # Open/close per command is what the app does. Nothing is held, so the
+      # phone app is never locked out and no heartbeat is owed.
+      #
+      # Mask 0x0003FFFF drops the source bits so any node's reply matches,
+      # while keeping the destination byte, so replies aimed at the phone app
+      # are filtered out rather than racing us.
+      - can_id: 0x0001A042
+        can_id_mask: 0x0003FFFF
+        use_extended_id: true
+        then:
+          - lambda: |-
+              // Seed -> key. Modified TEA, 32 rounds, cypher 0xB16B00B5, which
+              // is the constant attached to SESSION_ID 4 REMOTE_CONTROL.
+              if (x.size() < 6) return;
+              uint8_t src = (can_id >> 18) & 0xFF;
+              if (src != id(cmd_target)) return;
+              uint32_t v = ((uint32_t) x[2] << 24) | ((uint32_t) x[3] << 16) |
+                           ((uint32_t) x[4] << 8) | x[5];
+              uint32_t k = 0xB16B00B5, d = 0x9E3779B9;
+              for (int i = 32;;) {
+                v += (((k << 4) + 1131376761u) ^ (k + d) ^ ((k >> 5) + 1919510376u));
+                if (--i <= 0) break;
+                k += (((v << 4) + 1948272964u) ^ (v + d) ^ ((v >> 5) + 1400073827u));
+                d += 0x9E3779B9;
+              }
+              std::vector<uint8_t> p = {0x00, 0x04, (uint8_t) (v >> 24),
+                                        (uint8_t) (v >> 16), (uint8_t) (v >> 8), (uint8_t) v};
+              id(can_bus).send_data(0x02800043u | ((uint32_t) src << 8), true, p);
+
+      - can_id: 0x0001A043
+        can_id_mask: 0x0003FFFF
+        use_extended_id: true
+        then:
+          # Session open. Send the real command, then hand the session back.
+          - lambda: |-
+              uint8_t src = (can_id >> 18) & 0xFF;
+              if (src != id(cmd_target)) return;
+              if (id(cmd_dimmer)) {
+                // Dimmable light: message data 0, command in an 8-byte payload.
+                // [0] mode 0=Off 1=On 2=Blink 3=Swell, [1] brightness 1-100,
+                // [2] auto-off minutes, [3..6] cycle times.
+                std::vector<uint8_t> c(8, 0);
+                if (id(cmd_on)) {
+                  int lvl = id(cmd_level);
+                  if (lvl < 1) lvl = 1;      // 0 would read as "off"
+                  if (lvl > 100) lvl = 100;
+                  c[0] = 0x01;
+                  c[1] = (uint8_t) lvl;
+                }
+                id(can_bus).send_data(0x02820000u | ((uint32_t) src << 8), true, c);
+              } else {
+                // Latching relay: the exact opposite. Command rides in the
+                // message data byte of the ID and the payload MUST be empty.
+                // The device checks rx.Count == 0 and silently discards
+                // anything else, which is a fun afternoon to debug.
+                // COMMAND_MODE: OFF = 0, ON = 1, CLEAR_LATCH = 3.
+                std::vector<uint8_t> empty;
+                id(can_bus).send_data(
+                    0x02820000u | ((uint32_t) src << 8) | (id(cmd_on) ? 1u : 0u),
+                    true, empty);
+              }
+          - delay: 50ms
+          - lambda: |-
+              // Hand the session back. Addressed to src rather than
+              // cmd_target, which fixes a latent bug: this used to close
+              // cmd_target's session on ANY node's handshake reply.
+              uint8_t src = (can_id >> 18) & 0xFF;
+              if (src != id(cmd_target)) return;
+              std::vector<uint8_t> p = {0x00, 0x04};
+              id(can_bus).send_data(0x02800045u | ((uint32_t) src << 8), true, p);
+
+script:
+  # Command one device. Starts the session handshake; everything after this is
+  # driven by the target's replies, up in the on_frame triggers.
+  #
+  # `queued` matters. The handshake is three round trips through shared state,
+  # so two overlapping commands would corrupt each other: the second seed
+  # request would repoint cmd_target while the first was still waiting, and one
+  # device would get the other's command. Turning on every light from a Home
+  # Assistant scene is the obvious way to trip this.
+  #
+  # The 400ms tail is the queue slot, not a timeout. It has to outlast the
+  # handshake without approaching the 5s session timeout. Round trips measure
+  # in single-digit milliseconds.
+  - id: light_cmd
+    mode: queued
+    max_runs: 16
+    parameters:
+      addr: int
+      turn_on: bool
+      dimmer: bool
+      level: int
+    then:
+      - lambda: |-
+          id(cmd_target) = addr;
+          id(cmd_on) = turn_on;
+          id(cmd_dimmer) = dimmer;
+          id(cmd_level) = level;
+          std::vector<uint8_t> p = {0x00, 0x04};
+          // REQUEST 66 SESSION_REQUEST_SEED, source 0xA0, destination addr.
+          id(can_bus).send_data(0x02800042u | ((uint32_t) addr << 8), true, p);
+      - delay: 400ms
+
+button:
+  # Reboot the board from Home Assistant. Worth having on something that talks
+  # to a vehicle bus: if this node ever gets confused about a session, a
+  # restart drops every session it holds and the coach carries on without it.
+  # Nothing here is remembered across a reboot by design, so restarting costs
+  # only the few seconds it takes the bus to report everything again.
+  #
+  # Add `- platform: safe_mode` alongside this if you want a way back from a
+  # bad OTA without fetching a USB cable.
+  - platform: restart
+    id: restart_button
+    name: Restart
+    entity_category: config
+    icon: mdi:restart

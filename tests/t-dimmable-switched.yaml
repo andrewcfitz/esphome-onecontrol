@@ -1,0 +1,12 @@
+esphome:
+  name: t-dimmable-switched
+logger:
+packages:
+  board: !include ../boards/waveshare-esp32-s3-rs485-can.yaml
+  core: !include ../core.yaml
+  soffit: !include
+    file: ../devices/dimmable_light_switched.yaml
+    vars: {dev_id: soffit, dev_name: Soffit, dev_addr: "0xBC", dev_icon: "mdi:light-flood-down"}
+  porch: !include
+    file: ../devices/dimmable_light_switched.yaml
+    vars: {dev_id: porch, dev_name: Porch, dev_addr: "0x44", dev_icon: "mdi:lightbulb"}

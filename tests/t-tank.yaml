@@ -1,0 +1,12 @@
+esphome:
+  name: t-tank
+logger:
+packages:
+  board: !include ../boards/waveshare-esp32-s3-rs485-can.yaml
+  core: !include ../core.yaml
+  fresh: !include
+    file: ../devices/tank.yaml
+    vars: {dev_id: tank_fresh, dev_name: Fresh Tank, dev_addr: "0xEC", dev_icon: "mdi:cup-water"}
+  black: !include
+    file: ../devices/tank.yaml
+    vars: {dev_id: tank_black, dev_name: Black Tank, dev_addr: "0xCD", dev_icon: "mdi:toilet"}

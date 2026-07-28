@@ -1,0 +1,21 @@
+# Waveshare ESP32-S3-RS485-CAN.
+# 16MB flash, 8MB PSRAM, 7-36V screw terminal, WiFi only.
+# CAN on GPIO15 (TX) and GPIO16 (RX), isolated, with a 120R jumper.
+#
+# Pins confirmed from Waveshare's own Arduino demo (WS_GPIO.h: TXD2 15,
+# RXD2 16, both commented as the CAN pins), not a third party.
+#
+# The onboard 120R terminator ships disabled. Enable it with the jumper only
+# if this board replaced a terminator or sits at a physical end of the bus.
+# See the README's termination section.
+#
+# This file deliberately does not configure WiFi. Credentials are yours.
+substitutions:
+  can_tx_pin: GPIO15
+  can_rx_pin: GPIO16
+
+esp32:
+  variant: esp32s3
+  flash_size: 16MB
+  framework:
+    type: arduino

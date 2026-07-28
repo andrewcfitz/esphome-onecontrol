@@ -1,0 +1,12 @@
+esphome:
+  name: t-dimmable-light
+logger:
+packages:
+  board: !include ../boards/waveshare-esp32-s3-rs485-can.yaml
+  core: !include ../core.yaml
+  pendants: !include
+    file: ../devices/dimmable_light.yaml
+    vars: {dev_id: pendants, dev_name: Kitchen Pendants, dev_addr: "0x95", dev_icon: "mdi:ceiling-light"}
+  awning_1: !include
+    file: ../devices/dimmable_light.yaml
+    vars: {dev_id: awning_1, dev_name: Awning 1, dev_addr: "0x3F", dev_icon: "mdi:awning-outline"}
