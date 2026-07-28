@@ -2,13 +2,12 @@
 # 16MB flash, 8MB PSRAM, 7-36V screw terminal, WiFi only.
 # CAN on GPIO15 (TX) and GPIO16 (RX), isolated, with a 120R jumper.
 #
-# CHECK THE PINS. GPIO15/GPIO16 come from secondary sources, not from Waveshare
-# directly, because waveshare.com blocks automated fetches. They have not been
-# confirmed against the official Waveshare wiki. Do that before you flash. If
-# they are wrong the symptom is no frames at all, not an error.
+# Pins confirmed from Waveshare's own Arduino demo (WS_GPIO.h: TXD2 15,
+# RXD2 16, both commented as the CAN pins), not a third party.
 #
-# Termination: set the jumper to 120R only if this board replaced a
-# terminator or sits at a physical end of the bus. See the README.
+# The onboard 120R terminator ships disabled. Enable it with the jumper only
+# if this board replaced a terminator or sits at a physical end of the bus.
+# See the README's termination section.
 #
 # This file deliberately does not configure WiFi. Credentials are yours.
 substitutions:

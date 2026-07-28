@@ -105,33 +105,31 @@ bridging that difference is a bad afternoon.
 
 The default pick if all you want is OneControl in Home Assistant.
 
-- Isolated CAN, with an onboard 120 ohm termination jumper.
+- Isolated CAN, with an onboard 120 ohm termination jumper, disabled by
+  default.
 - 16MB flash, 8MB PSRAM.
 - 7-36V screw terminal input, so it runs off coach 12V directly with no
   converter.
 - WiFi only, no wired Ethernet.
-- CAN on GPIO15 (TX) and GPIO16 (RX).
+- CAN on GPIO15 (TX) and GPIO16 (RX), confirmed from Waveshare's own Arduino
+  demo (`WS_GPIO.h`, `TXD2`/`RXD2`).
 
 Board file: `boards/waveshare-esp32-s3-rs485-can.yaml`.
-
-> **Check the pin numbers before you rely on them.** GPIO15 and GPIO16 come from
-> secondary sources, not from Waveshare directly, because waveshare.com blocks
-> automated fetches. They have not been confirmed against the official Waveshare
-> wiki. Do that first. If they are wrong, the symptom is no frames at all, which
-> section 8 covers.
 
 ### Waveshare ESP32-S3-ETH-8DI-8RO-C
 
 The pick if you also want eight relays and eight isolated digital inputs on the
 same board, for things that are not on the CAN bus at all.
 
-- Isolated CAN.
+- Isolated CAN, with the same 120 ohm termination jumper as the RS485-CAN
+  board, disabled by default.
 - Wired Ethernet (W5500). No WiFi needed.
 - 16MB flash.
 - Same 7-36V screw terminal input.
 - 8 relay outputs, 8 isolated inputs, yours to configure. The board file only
   sets up the processor, the CAN pins and the Ethernet PHY.
-- CAN on GPIO17 (TX) and GPIO18 (RX).
+- CAN on GPIO17 (TX) and GPIO18 (RX), confirmed from Waveshare's own Arduino
+  demo (`WS_GPIO.h`, `TXD1`/`RXD1`).
 
 Board file: `boards/waveshare-esp32-s3-eth-8di-8ro-c.yaml`.
 
@@ -198,8 +196,14 @@ right.
 **For the documented tap** (leveler spare port, terminating plug removed) the
 answer is: **enabled**.
 
-On the RS485-CAN board that is the 120R jumper. On other boards it may be a DIP
-switch or a solder bridge. Check your board's own documentation.
+Both recommended boards ship with the 120R jumper off. Nothing about flashing
+the board file changes that: it is a physical jumper, and it stays wherever it
+was left. If you are doing the documented tap and you do nothing else, you end
+up with a bus one terminator short. Move the jumper to 120R.
+
+On the RS485-CAN board and the ETH-8DI-8RO-C that is the 120R jumper. On other
+boards it may be a DIP switch or a solder bridge. Check your board's own
+documentation.
 
 ### 4.2 Polarity
 
@@ -483,9 +487,10 @@ rough order of likelihood:
 1. **Polarity.** CANH and CANL swapped. Harmless, and the most common cause.
    Swap the two wires and try again.
 2. **Wrong pins for your board.** `can_tx_pin` and `can_rx_pin` have to match
-   your hardware. If you are on the RS485-CAN, note the warning in section 3:
-   those pin numbers are not confirmed.
-3. **Termination.** Section 4.1. Too few and too many both do this.
+   your hardware. Using the wrong board file is the usual way to get this
+   wrong.
+3. **Termination left at its default.** Both recommended boards ship with the
+   120R jumper disabled. Section 4.1. Too few and too many both stop the bus.
 4. **Bit rate.** IDS-CAN is 250 kbit/s. `core.yaml` sets it, so this only bites
    if you overrode it.
 5. **Not actually connected.** Check the connector is seated and that the screw
