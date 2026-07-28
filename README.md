@@ -270,7 +270,7 @@ you have your list.
 
 ### Pin the version
 
-Both examples use `ref: v1`. Keep it that way. Tracking `main` means an OTA
+Both examples use `ref: v1.1`. Keep it that way. Tracking `main` means an OTA
 update can change what your lights do at a moment you did not choose, which is a
 poor property in a vehicle. Bump the ref deliberately, when you feel like reading
 a changelog.
@@ -279,10 +279,27 @@ a changelog.
 packages:
   onecontrol:
     url: https://github.com/andrewcfitz/esphome-onecontrol
-    ref: v1
+    ref: v1.1
     files:
       - boards/waveshare-esp32-s3-rs485-can.yaml
       - core.yaml
+```
+
+### If you add your own `on_boot`
+
+`core.yaml` declares `esphome.on_boot` as a list, not a mapping, specifically so
+consumers can too. ESPHome merges packages by walking into mappings and
+concatenating their `then:` lists, but it concatenates two lists as separate
+automations, ordered by priority. Write yours as a list and you get a second,
+independent automation. Write it as a mapping and ESPHome merges it into core's
+single automation, tacking your actions on after core's `delay: 10s`.
+
+```yaml
+esphome:
+  on_boot:
+    - priority: -10
+      then:
+        - logger.log: "our own boot action"
 ```
 
 ## 6. Device reference

@@ -32,16 +32,17 @@
 
 esphome:
   on_boot:
-    priority: -100
-    then:
-      # Let the bus settle before the light entities may transmit. An ESPHome
-      # light writes its state as soon as it starts, which here would command
-      # every light on the coach on every reboot and OTA update. Nodes report
-      # at 1 Hz, so 10s is ample for reality to arrive first.
-      - delay: 10s
-      - globals.set:
-          id: light_ready
-          value: 'true'
+    - priority: -100
+      then:
+        # Let the bus settle before the light entities may transmit. An
+        # ESPHome light writes its state as soon as it starts, which here
+        # would command every light on the coach on every reboot and OTA
+        # update. Nodes report at 1 Hz, so 10s is ample for reality to
+        # arrive first.
+        - delay: 10s
+        - globals.set:
+            id: light_ready
+            value: 'true'
 
 globals:
   # The command currently in flight. The session handshake takes three round
