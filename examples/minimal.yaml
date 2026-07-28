@@ -1,0 +1,37 @@
+# The smallest thing that works: one board, WiFi, and enough to find out
+# what is on your bus.
+#
+# Flash this as-is first. Watch the log for lines tagged oc.discover, which
+# name every device on your coach and give you its address. Then fill in the
+# devices you want below, comment out discover.yaml, and flash again.
+esphome:
+  name: rv-canbus
+  friendly_name: RV
+
+logger:
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+  encryption:
+    key: !secret api_encryption_key
+
+ota:
+  - platform: esphome
+
+packages:
+  onecontrol:
+    url: https://github.com/andrewcfitz/esphome-onecontrol
+    ref: v1
+    files:
+      - boards/waveshare-esp32-s3-rs485-can.yaml
+      - core.yaml
+      - discover.yaml
+
+      # Replace these with your own, from the oc.discover log lines.
+      # - path: devices/relay_light.yaml
+      #   vars: {dev_id: hutch, dev_name: Hutch, dev_addr: "0x0A", dev_icon: "mdi:cupboard-outline"}
+      # - path: devices/tank.yaml
+      #   vars: {dev_id: tank_fresh, dev_name: Fresh Tank, dev_addr: "0xEC", dev_icon: "mdi:cup-water"}
