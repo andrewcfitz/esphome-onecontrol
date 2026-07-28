@@ -1,0 +1,12 @@
+esphome:
+  name: t-relay-switch
+logger:
+packages:
+  board: !include ../boards/waveshare-esp32-s3-rs485-can.yaml
+  core: !include ../core.yaml
+  pump: !include
+    file: ../devices/relay_switch.yaml
+    vars: {dev_id: water_pump, dev_name: Water Pump, dev_addr: "0x21", dev_icon: "mdi:water-pump", dev_class: running}
+  heater: !include
+    file: ../devices/relay_switch.yaml
+    vars: {dev_id: tank_heater, dev_name: Tank Heater, dev_addr: "0xF2", dev_icon: "mdi:heating-coil", dev_class: heat}

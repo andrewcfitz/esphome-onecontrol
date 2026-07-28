@@ -1,0 +1,65 @@
+# One OneControl latching relay as a switch: water pump, tank heater, and
+# anything else that is not a light.
+#
+#   vars: dev_id / dev_name / dev_addr / dev_icon, as relay_light.yaml
+#         dev_class  Home Assistant device_class for the state sensor,
+#                    e.g. running for a pump, heat for a heater
+substitutions:
+  dev_id: unset
+  dev_name: unset
+  dev_addr: "0x00"
+  dev_icon: "mdi:toggle-switch"
+  dev_class: running
+
+switch:
+  - platform: template
+    id: ${dev_id}
+    name: ${dev_name}
+    icon: ${dev_icon}
+    # {} rather than false while the node has not reported: a binary_sensor
+    # with no state reads as false, which would claim the pump is off before
+    # the node has said anything. That is a guess dressed up as a reading.
+    lambda: |-
+      if (!id(${dev_id}_state).has_state()) return {};
+      return id(${dev_id}_state).state;
+    turn_on_action:
+      - script.execute:
+          id: light_cmd
+          addr: ${dev_addr}
+          turn_on: true
+          dimmer: false
+          level: 100
+    turn_off_action:
+      - script.execute:
+          id: light_cmd
+          addr: ${dev_addr}
+          turn_on: false
+          dimmer: false
+          level: 100
+
+binary_sensor:
+  - platform: template
+    id: ${dev_id}_state
+    name: ${dev_name} State
+    device_class: ${dev_class}
+    entity_category: diagnostic
+
+canbus:
+  - id: !extend can_bus
+    on_frame:
+      - can_id: 0x300
+        can_id_mask: 0x700
+        use_extended_id: false
+        then:
+          - lambda: |-
+              if ((can_id & 0xFF) != ${dev_addr}) return;
+              if (x.empty()) return;
+              id(${dev_id}_state).publish_state((x[0] & 0x0F) == 1);
+
+      - can_id: 0x00020000
+        can_id_mask: 0x00030000
+        use_extended_id: true
+        then:
+          - lambda: |-
+              if (((can_id >> 8) & 0xFF) != ${dev_addr}) return;
+              id(${dev_id}_state).publish_state((can_id & 0xFF) == 1);
