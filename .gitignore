@@ -1,3 +1,6 @@
 .esphome/
 secrets.yaml
 .DS_Store
+
+# Written by `esphome compile` when it runs in tests/.
+tests/.gitignore
