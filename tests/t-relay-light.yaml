@@ -1,0 +1,12 @@
+esphome:
+  name: t-relay-light
+logger:
+packages:
+  board: !include ../boards/waveshare-esp32-s3-rs485-can.yaml
+  core: !include ../core.yaml
+  hutch: !include
+    file: ../devices/relay_light.yaml
+    vars: {dev_id: hutch, dev_name: Hutch, dev_addr: "0x0A", dev_icon: "mdi:cupboard-outline"}
+  scare: !include
+    file: ../devices/relay_light.yaml
+    vars: {dev_id: scare, dev_name: Scare, dev_addr: "0xF4", dev_icon: "mdi:car-light-high"}
