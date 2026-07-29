@@ -31,6 +31,7 @@
 # ===========================================================================
 
 esphome:
+  min_version: 2025.3.0
   on_boot:
     - priority: -100
       then:
@@ -86,8 +87,7 @@ canbus:
     rx_pin: ${can_rx_pin}
     can_id: 0
     bit_rate: 250kbps
-    # NORMAL, not LISTENONLY: we transmit.
-    mode: NORMAL
+    # mode defaults to NORMAL, not LISTENONLY: we transmit.
 
     on_frame:
       # ---- Session handshake -------------------------------------------
