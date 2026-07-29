@@ -22,7 +22,7 @@ ota:
 packages:
   onecontrol:
     url: https://github.com/andrewcfitz/esphome-onecontrol
-    ref: v1.1
+    ref: v1.2
     files:
       - boards/waveshare-esp32-s3-eth-8di-8ro-c.yaml
       - core.yaml

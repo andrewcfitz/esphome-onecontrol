@@ -31,6 +31,13 @@ There are no slide, awning or leveler controls. Section 2 explains why.
 
 You need an ESP32 board with a CAN transceiver, a connector, and about an hour.
 
+### Requirements
+
+ESPHome 2025.3.0 or newer. This package instantiates the same device file
+repeatedly with different `vars:`, and per-file `vars:` in a remote package's
+`files:` list is what 2025.3.0 added. The Home Assistant ESPHome add-on can lag
+well behind that; check its version first if the package will not load.
+
 ## 2. Read this before you buy anything
 
 This transmits on the CAN bus that your coach's slides, levelers and brakes are
@@ -270,7 +277,7 @@ you have your list.
 
 ### Pin the version
 
-Both examples use `ref: v1.1`. Keep it that way. Tracking `main` means an OTA
+Both examples use `ref: v1.2`. Keep it that way. Tracking `main` means an OTA
 update can change what your lights do at a moment you did not choose, which is a
 poor property in a vehicle. Bump the ref deliberately, when you feel like reading
 a changelog.
@@ -279,7 +286,7 @@ a changelog.
 packages:
   onecontrol:
     url: https://github.com/andrewcfitz/esphome-onecontrol
-    ref: v1.1
+    ref: v1.2
     files:
       - boards/waveshare-esp32-s3-rs485-can.yaml
       - core.yaml

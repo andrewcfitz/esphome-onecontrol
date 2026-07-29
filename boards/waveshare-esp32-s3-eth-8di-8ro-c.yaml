@@ -21,6 +21,12 @@ substitutions:
   can_rx_pin: GPIO18
 
 esp32:
+  # Board stated explicitly rather than inferred from the variant. Recent
+  # ESPHome can derive esp32-s3-devkitc-1 from variant: esp32s3 on its own,
+  # but older ESPHome cannot, and fails with a confusing "'board' is a
+  # required option" error that looks like a package problem rather than a
+  # version problem.
+  board: esp32-s3-devkitc-1
   variant: esp32s3
   flash_size: 16MB
   framework:
