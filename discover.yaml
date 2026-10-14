@@ -1,21 +1,23 @@
 # Find out what is on your bus. Include this, flash, watch the log, then
 # remove it.
 #
-# Every node broadcasts its identity on 0x200|addr once a second:
+# Every node broadcasts its identity on 0x200|addr, nominally once a second
+# and in practice anywhere up to every 18s:
 #   [0..1] product id   [2] product instance
 #   [3]    DEVICE_TYPE  [4..5] FUNCTION_NAME
 #   [6]    device instance << 4 | function instance
 #   [7]    capabilities
 #
 # Logged once per node rather than once a second, because 36 devices at 1 Hz
-# is a firehose. THIS IS HOW YOU FIND YOUR OWN ADDRESSES.
+# is a firehose. THIS IS HOW YOU FIND YOUR dev_func AND dev_inst VALUES. The
+# addresses it prints are for reading the log only: a power cut reassigns them.
 #
 # The lookup tables below cost a couple of KB of flash, which is why this is
 # a separate opt-in file rather than part of core.yaml.
 #
 # It reports everything, including motors this project cannot drive. That is
-# deliberate: knowing your slide is at 0x3E is how you know not to point
-# anything at it.
+# deliberate: knowing what your slides announce themselves as is how you know
+# what to leave alone.
 canbus:
   - id: !extend can_bus
     on_frame:
@@ -25,13 +27,16 @@ canbus:
         then:
           - lambda: |-
               if (x.size() < 7) return;
-              static uint8_t seen[32] = {0};
+              // Logged again if an address starts announcing something else,
+              // which is what a reshuffle looks like from here.
+              static uint32_t logged[256] = {0};
               uint8_t a = can_id & 0xFF;
-              if (seen[a >> 3] & (1 << (a & 7))) return;
-              seen[a >> 3] |= 1 << (a & 7);
-
               uint8_t dt = x[3];
               uint16_t fn = (x[4] << 8) | x[5];
+              uint8_t inst = x[6] & 0x0F;
+              uint32_t k = ((uint32_t) dt << 24) | ((uint32_t) fn << 8) | inst;
+              if (logged[a] == k) return;
+              logged[a] = k;
 
               const char *dts = "UNKNOWN";
               switch (dt) {
@@ -67,9 +72,11 @@ canbus:
 
               // Unknown values print their number so you can look them up or
               // report them. A name we do not have is still a device you own.
+              // The tail is what goes in a device file's vars. The address is
+              // only for reading the log: it will not survive a power cut.
               if (dt > 0 && fn > 0) {
                 ESP_LOGI("oc.discover",
-                         "node 0x%02X  %s(%u)  %s(%u)  instance %u",
+                         "node 0x%02X  %s(%u)  %s(%u)  instance %u  ->  dev_func: %u, dev_inst: %u",
                          (unsigned) a, dts, (unsigned) dt, fns, (unsigned) fn,
-                         (unsigned) (x[6] & 0x0F));
+                         (unsigned) inst, (unsigned) fn, (unsigned) inst);
               }

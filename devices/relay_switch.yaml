@@ -1,21 +1,40 @@
 # One OneControl latching relay as a switch: water pump, tank heater, and
 # anything else that is not a light.
 #
-#   vars: dev_id / dev_name / dev_addr / dev_icon, as relay_light.yaml
+#   vars: dev_id / dev_name / dev_func / dev_inst / dev_icon, as relay_light.yaml
 #         dev_class  Home Assistant device_class for the state sensor,
 #                    e.g. running for a pump, heat for a heater
 #
-# Get dev_addr from discover.yaml. Do not guess it, and never point this file
-# at a MOMENTARY_H_BRIDGE_TYPE_2 or MOMENTARY_RELAY_TYPE_2 node. Those classes
-# derive from the relay class and accept the identical command frame: an empty
-# payload with the command in the message data byte of the ID. A wrong address
-# there does not fail, it drives a slide or an awning.
+# Binds only to LATCHING_RELAY or LATCHING_RELAY_TYPE_2, never to a
+# MOMENTARY_H_BRIDGE_TYPE_2 or MOMENTARY_RELAY_TYPE_2. Those classes derive from
+# the relay class and accept the identical command frame: an empty payload with
+# the command in the message data byte of the ID. Sent to one of those, it does
+# not fail, it drives a slide or an awning.
 substitutions:
   dev_id: unset
   dev_name: unset
-  dev_addr: unset
+  dev_func: unset
+  dev_inst: unset
   dev_icon: "mdi:toggle-switch"
   dev_class: running
+
+globals:
+  # Current address: -1 while unbound, -2 while ambiguous. Neither matches a
+  # real frame, so an unbound device hears nothing and sends nothing.
+  - id: ${dev_id}_addr
+    type: int
+    restore_value: no
+    initial_value: '-1'
+
+# Find this node by what it is, not where it was. Only a LATCHING_RELAY or
+# LATCHING_RELAY_TYPE_2 can match, so this file cannot bind to a motor node
+# however the vars are written.
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          id(oc_bind)("${dev_name}", (1ull << 3) | (1ull << 30), ${dev_func}, ${dev_inst},
+                      id(${dev_id}_addr));
 
 switch:
   - platform: template
@@ -29,19 +48,21 @@ switch:
       if (!id(${dev_id}_state).has_state()) return {};
       return id(${dev_id}_state).state;
     turn_on_action:
-      - script.execute:
-          id: light_cmd
-          addr: ${dev_addr}
-          turn_on: true
-          dimmer: false
-          level: 100
+      - lambda: |-
+          int a = id(${dev_id}_addr);
+          if (a < 0) {
+            ESP_LOGW("oc", "${dev_name}: no node bound, command not sent");
+            return;
+          }
+          id(light_cmd)->execute(a, (int) id(oc_key)[a], true, false, 100);
     turn_off_action:
-      - script.execute:
-          id: light_cmd
-          addr: ${dev_addr}
-          turn_on: false
-          dimmer: false
-          level: 100
+      - lambda: |-
+          int a = id(${dev_id}_addr);
+          if (a < 0) {
+            ESP_LOGW("oc", "${dev_name}: no node bound, command not sent");
+            return;
+          }
+          id(light_cmd)->execute(a, (int) id(oc_key)[a], false, false, 100);
 
 binary_sensor:
   - platform: template
@@ -58,7 +79,7 @@ canbus:
         use_extended_id: false
         then:
           - lambda: |-
-              if ((can_id & 0xFF) != ${dev_addr}) return;
+              if ((can_id & 0xFF) != id(${dev_id}_addr)) return;
               if (x.empty()) return;
               id(${dev_id}_state).publish_state((x[0] & 0x0F) == 1);
 
@@ -67,5 +88,5 @@ canbus:
         use_extended_id: true
         then:
           - lambda: |-
-              if (((can_id >> 8) & 0xFF) != ${dev_addr}) return;
+              if (((can_id >> 8) & 0xFF) != id(${dev_id}_addr)) return;
               id(${dev_id}_state).publish_state((can_id & 0xFF) == 1);

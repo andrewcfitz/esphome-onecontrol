@@ -1,6 +1,6 @@
 # One OneControl tank level sensor.
 #
-#   vars: dev_id / dev_name / dev_addr / dev_icon, as relay_light.yaml
+#   vars: dev_id / dev_name / dev_func / dev_inst / dev_icon, as relay_light.yaml
 #
 # TANK_SENSOR nodes broadcast DEVICE_STATUS on 0x300|addr. No session, no
 # polling, no request: they just talk, 1 Hz idle and ~333ms on change.
@@ -10,8 +10,25 @@
 substitutions:
   dev_id: unset
   dev_name: unset
-  dev_addr: unset
+  dev_func: unset
+  dev_inst: unset
   dev_icon: "mdi:cup-water"
+
+globals:
+  # Current address: -1 while unbound, -2 while ambiguous. Neither matches a
+  # real frame, so an unbound device hears nothing and sends nothing.
+  - id: ${dev_id}_addr
+    type: int
+    restore_value: no
+    initial_value: '-1'
+
+# Find this node by what it is, not where it was. Only a TANK_SENSOR can match.
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          id(oc_bind)("${dev_name}", 1ull << 10, ${dev_func}, ${dev_inst},
+                      id(${dev_id}_addr));
 
 sensor:
   - platform: template
@@ -33,7 +50,7 @@ canbus:
         use_extended_id: false
         then:
           - lambda: |-
-              if ((can_id & 0xFF) != ${dev_addr}) return;
+              if ((can_id & 0xFF) != id(${dev_id}_addr)) return;
               if (x.empty()) return;
               float pct = x[0] & 0x7F;
               if (pct > 100) pct = 100;

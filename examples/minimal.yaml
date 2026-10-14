@@ -2,7 +2,7 @@
 # what is on your bus.
 #
 # Flash this as-is first. Watch the log for lines tagged oc.discover, which
-# name every device on your coach and give you its address. Then fill in the
+# name every device on your coach and give you its dev_func and dev_inst. Then fill in the
 # devices you want below, comment out discover.yaml, and flash again.
 esphome:
   name: rv-canbus
@@ -24,14 +24,14 @@ ota:
 packages:
   onecontrol:
     url: https://github.com/andrewcfitz/esphome-onecontrol
-    ref: v1.2
+    ref: v2.0
     files:
       - boards/waveshare-esp32-s3-rs485-can.yaml
       - core.yaml
       - discover.yaml
 
       # Replace these with your own, from the oc.discover log lines.
-      # - path: devices/relay_light.yaml
-      #   vars: {dev_id: hutch, dev_name: Hutch, dev_addr: "0x0A", dev_icon: "mdi:cupboard-outline"}
+      # - path: devices/relay_switch.yaml
+      #   vars: {dev_id: water_pump, dev_name: Water Pump, dev_func: 5, dev_inst: 0, dev_icon: "mdi:water-pump"}
       # - path: devices/tank.yaml
-      #   vars: {dev_id: tank_fresh, dev_name: Fresh Tank, dev_addr: "0xEC", dev_icon: "mdi:cup-water"}
+      #   vars: {dev_id: tank_fresh, dev_name: Fresh Tank, dev_func: 67, dev_inst: 0, dev_icon: "mdi:cup-water"}

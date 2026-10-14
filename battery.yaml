@@ -2,10 +2,10 @@
 #
 # Optional. Include it once. Nothing else depends on it.
 #
-# The three candidate addresses below are the coach this was built on:
-# 0xD1 CHASSIS_INFO, 0xCF GENERATOR_GENIE, 0x72 LEVELER. Yours may differ,
-# or you may have none of them, in which case the sensor stays unknown and
-# nothing else breaks. Run discover.yaml to see what you have.
+# Three module types can answer: CHASSIS_INFO, GENERATOR_GENIE and
+# LEVELER_TYPE_4. They are found by DEVICE_TYPE alone, so there is nothing to
+# configure, and a type with no node (or, oddly, two) is simply not asked. With
+# none of them present the sensor stays unknown and nothing else breaks.
 globals:
   - id: volt_src        # which node battery voltage is being read from
     type: int
@@ -28,10 +28,12 @@ interval:
   - interval: 30s
     then:
       - lambda: |-
-          const uint8_t srcs[] = {0xD1, 0xCF, 0x72};
+          const uint8_t types[] = {39, 24, 40};  // CHASSIS_INFO, GENERATOR_GENIE, LEVELER_TYPE_4
           std::vector<uint8_t> p = {0x00, 43};
-          for (uint8_t s : srcs) {
-            id(can_bus).send_data(0x02800011u | ((uint32_t) s << 8), true, p);
+          for (uint8_t t : types) {
+            int a = id(oc_resolve)(1ull << t, -1, -1);
+            if (a < 0) continue;
+            id(can_bus).send_data(0x02800011u | ((uint32_t) a << 8), true, p);
           }
 
 canbus:
@@ -61,12 +63,14 @@ canbus:
               }
               // Prefer the chassis module, then generator, then leveler, so
               // the reading sticks with one source instead of alternating.
+              // Ranked by what the replying node announced itself as, not by
+              // its address, which a power cut can change.
               auto prio = [](uint8_t a) -> int {
-                switch (a) {
-                  case 0xD1: return 3;  // CHASSIS_INFO
-                  case 0xCF: return 2;  // GENERATOR_GENIE
-                  case 0x72: return 1;  // LEVELER
-                  default:   return 0;
+                switch (id(oc_key)[a] >> 24) {
+                  case 39: return 3;  // CHASSIS_INFO
+                  case 24: return 2;  // GENERATOR_GENIE
+                  case 40: return 1;  // LEVELER_TYPE_4
+                  default: return 0;
                 }
               };
               if (prio(src) == 0 || prio(src) < prio(id(volt_src))) return;

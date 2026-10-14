@@ -1,20 +1,28 @@
 # One OneControl DIMMABLE_LIGHT node that really dims. Include once per
 # fixture.
 #
-#   vars: dev_id / dev_name / dev_addr / dev_icon, as relay_light.yaml
+#   vars: dev_id / dev_name / dev_func / dev_inst / dev_icon, as relay_light.yaml
 #
 # Test the fixture before choosing this file. DEVICE_TYPE 20 DIMMABLE_LIGHT
 # is what the DRIVER supports, not what the FIXTURE can do. On the coach this
 # was built from, the Soffit accepts brightness happily and then strobes on
 # anything below full, while the pendants dim properly. Only your coach can
-# tell you which is which. If it strobes, use relay_light.yaml instead.
+# tell you which is which. If it strobes, use dimmable_light_switched.yaml.
 substitutions:
   dev_id: unset
   dev_name: unset
-  dev_addr: unset
+  dev_func: unset
+  dev_inst: unset
   dev_icon: "mdi:lightbulb"
 
 globals:
+  # Current address: -1 while unbound, -2 while ambiguous. Neither matches a
+  # real frame, so an unbound device hears nothing and sends nothing.
+  - id: ${dev_id}_addr
+    type: int
+    restore_value: no
+    initial_value: '-1'
+
   # The last brightness this node REPORTED, 0 when off. This stops the light
   # chasing its own reflection, and it fixed a real fault: turning the
   # pendants on made them flash on and off instead of fading up.
@@ -38,6 +46,15 @@ globals:
     type: int
     restore_value: no
     initial_value: '0'
+
+# Find this node by what it is, not where it was. Only a DIMMABLE_LIGHT can
+# match.
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          id(oc_bind)("${dev_name}", 1ull << 20, ${dev_func}, ${dev_inst},
+                      id(${dev_id}_addr));
 
 light:
   - platform: monochromatic
@@ -70,7 +87,12 @@ output:
           // fixture mid-fade restarts the fade, which made the pendants flash
           // instead of ramping. See bus_level_* in globals.
           if (lvl == id(bus_level_${dev_id})) return;
-          id(light_cmd)->execute(${dev_addr}, lvl > 0, true, lvl > 0 ? lvl : 100);
+          int a = id(${dev_id}_addr);
+          if (a < 0) {
+            ESP_LOGW("oc", "${dev_name}: no node bound, command not sent");
+            return;
+          }
+          id(light_cmd)->execute(a, (int) id(oc_key)[a], lvl > 0, true, lvl > 0 ? lvl : 100);
 
 binary_sensor:
   - platform: template
@@ -131,7 +153,7 @@ canbus:
         use_extended_id: false
         then:
           - lambda: |-
-              if ((can_id & 0xFF) != ${dev_addr}) return;
+              if ((can_id & 0xFF) != id(${dev_id}_addr)) return;
               if (x.empty()) return;
               id(bus_level_${dev_id}) = (x[0] != 0 && x.size() > 1) ? x[1] : 0;
               id(${dev_id}_state).publish_state(x[0] != 0);
@@ -149,7 +171,7 @@ canbus:
         use_extended_id: true
         then:
           - lambda: |-
-              if (((can_id >> 8) & 0xFF) != ${dev_addr}) return;
+              if (((can_id >> 8) & 0xFF) != id(${dev_id}_addr)) return;
               if (x.empty()) return;
               id(${dev_id}_state).publish_state(x[0] != 0);
               if (x.size() > 1) id(${dev_id}_level).publish_state(x[1]);

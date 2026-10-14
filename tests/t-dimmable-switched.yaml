@@ -6,7 +6,7 @@ packages:
   core: !include ../core.yaml
   soffit: !include
     file: ../devices/dimmable_light_switched.yaml
-    vars: {dev_id: soffit, dev_name: Soffit, dev_addr: "0xBC", dev_icon: "mdi:light-flood-down"}
+    vars: {dev_id: soffit, dev_name: Soffit, dev_func: 366, dev_inst: 0, dev_icon: "mdi:light-flood-down"}
   porch: !include
     file: ../devices/dimmable_light_switched.yaml
-    vars: {dev_id: porch, dev_name: Porch, dev_addr: "0x44", dev_icon: "mdi:lightbulb"}
+    vars: {dev_id: porch, dev_name: Porch, dev_func: 366, dev_inst: 1, dev_icon: "mdi:lightbulb"}

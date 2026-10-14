@@ -147,7 +147,10 @@ All multi-byte fields are big-endian. See `GetUINT16` at `a0078:5025`.
 
 ### Self-discovery: the device inventory
 
-Every node broadcasts its own identity on `0x200 | address` once a second.
+Every node broadcasts its own identity on `0x200 | address`, nominally once a
+second. Measured, it is much less regular than that: in a 40 s capture of 36
+nodes, gaps of 10-18 s between one node's announcements were common, while the
+same nodes' `DEVICE_STATUS` held a steady 1 Hz.
 Payload layout from `a0079:5444`:
 
 ```
@@ -158,8 +161,9 @@ Payload layout from `a0079:5444`:
 ```
 
 Decoding that against `DEVICE_TYPE` (`a0080:600-780`) and `FUNCTION_NAME`
-(`a0080:903-2328`) turns the bus into a self-describing inventory. This is where
-every address in `examples/coach.yaml` comes from. None were guessed.
+(`a0080:903-2328`) turns the bus into a self-describing inventory. Since v2 it
+is also how every device is found at runtime; see "Addresses are not stable"
+below.
 `discover.yaml` is that decoder, reduced to the parts worth logging.
 
 The eight names in the OneControl app matched eight nodes with no leftovers on
@@ -362,6 +366,35 @@ assignment unchanged, which is the only reason to believe the rest of the map.
 **Lesson:** grepping a decompile for `NAME = 5` is not the same as reading the
 enum that owns it.
 
+### Addresses are not stable
+
+v1 configured every device by node address. The inventory had been read off the
+wire, the addresses held still for weeks, and nothing suggested they were
+anything but fixed.
+
+Then the whole coach lost power. On the way back up, 15 of the 17 configured
+addresses were empty, and the two still answering could not be assumed to be
+the same devices. Nothing worked: every light, switch and tank now pointed at
+nothing or at something else, and so did the awning motor controls kept outside
+this package. That last case is the alarming one, since a motor's FORWARD is
+the same frame as a relay's ON.
+
+The panel and the app were never confused, because they never stored an
+address. The app's `LogicalDevice*` classes are keyed on identity, and the
+address is resolved underneath. v2 does the same: `core.yaml` keeps a table of
+what every address last announced, each device file names a `FUNCTION_NAME`
+and function instance and fixes the `DEVICE_TYPE` it accepts, and the address
+is looked up continuously. Two nodes claiming one identity are refused rather
+than chosen between. A queued command re-checks the identity at its address
+before sending.
+
+The `NETWORK` message (type 0, the `0x0xx` frames) is almost certainly the
+address negotiation itself. It has not been decoded, because binding by
+identity does not need it.
+
+**Lesson:** a value that has never changed is not the same as a value that
+cannot change. Ask what assigns it.
+
 ### Device class is not fixture capability
 
 `0xBC` is a `DIMMABLE_LIGHT`, so it got a brightness slider. The fixture strobes
@@ -398,6 +431,12 @@ Stated plainly, because the above is a long argument for doing so:
   here is the app's *simulator* of the device, which stops on `SESSION_END` and
   on an explicit `STOP` but has no timer of its own. Physical firmware very
   likely does. Nothing here relies on it.
+- **When addresses are reassigned.** Seen once, after a full power loss. Whether
+  a node keeps its address across a partial outage, or whether some nodes
+  always reclaim theirs, is unknown. v2 does not depend on the answer.
+- **Nodes with no function name.** v2 cannot bind them, since `FUNCTION_NAME`
+  is half of the identity. None of the devices on this coach's list are
+  affected.
 - **Three unnamed tank sensors** at `0x2E`, `0xC6`, `0xD4` (`FUNCTION_NAME` 0).
   Two set a fuel-sensor capability bit. Left unexposed.
 - **Which physical grey tank is 1, 2 or 3.** The bus reveals only the function
@@ -415,7 +454,8 @@ Add `discover.yaml` to your `files:` list, flash, and run:
 esphome logs your-node.yaml
 ```
 
-The `oc.discover` lines are the decoded device inventory, one per node. Going
+The `oc.discover` lines are the decoded device inventory, one per node, each
+ending in the `dev_func` / `dev_inst` pair a device file wants. Going
 further than that means adding your own `on_frame` handler to log raw frames;
 this repository does not ship one, because a coach at 1 Hz across 36 nodes fills
 a log fast. Toggle one thing at a time and watch what moves.

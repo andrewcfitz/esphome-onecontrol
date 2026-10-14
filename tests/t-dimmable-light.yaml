@@ -6,7 +6,7 @@ packages:
   core: !include ../core.yaml
   pendants: !include
     file: ../devices/dimmable_light.yaml
-    vars: {dev_id: pendants, dev_name: Kitchen Pendants, dev_addr: "0x95", dev_icon: "mdi:ceiling-light"}
+    vars: {dev_id: pendants, dev_name: Kitchen Pendants, dev_func: 34, dev_inst: 0, dev_icon: "mdi:ceiling-light"}
   awning_1: !include
     file: ../devices/dimmable_light.yaml
-    vars: {dev_id: awning_1, dev_name: Awning 1, dev_addr: "0x3F", dev_icon: "mdi:awning-outline"}
+    vars: {dev_id: awning_1, dev_name: Awning 1, dev_func: 49, dev_inst: 1, dev_icon: "mdi:awning-outline"}

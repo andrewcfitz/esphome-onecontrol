@@ -15,50 +15,50 @@ packages:
   # ---- Lights ------------------------------------------------------
   awning_1: !include
     file: ../devices/dimmable_light.yaml
-    vars: {dev_id: awning_1, dev_name: Awning 1, dev_addr: "0x3F", dev_icon: "mdi:awning-outline"}
+    vars: {dev_id: awning_1, dev_name: Awning 1, dev_func: 49, dev_inst: 1, dev_icon: "mdi:awning-outline"}
   awning_2: !include
     file: ../devices/dimmable_light.yaml
-    vars: {dev_id: awning_2, dev_name: Awning 2, dev_addr: "0x62", dev_icon: "mdi:awning-outline"}
+    vars: {dev_id: awning_2, dev_name: Awning 2, dev_func: 49, dev_inst: 2, dev_icon: "mdi:awning-outline"}
   pendants: !include
     file: ../devices/dimmable_light.yaml
-    vars: {dev_id: pendants, dev_name: Kitchen Pendants, dev_addr: "0x95", dev_icon: "mdi:ceiling-light"}
+    vars: {dev_id: pendants, dev_name: Kitchen Pendants, dev_func: 34, dev_inst: 0, dev_icon: "mdi:ceiling-light"}
   soffit: !include
     file: ../devices/dimmable_light_switched.yaml
-    vars: {dev_id: soffit, dev_name: Soffit, dev_addr: "0xBC", dev_icon: "mdi:light-flood-down"}
+    vars: {dev_id: soffit, dev_name: Soffit, dev_func: 366, dev_inst: 0, dev_icon: "mdi:light-flood-down"}
   hutch: !include
     file: ../devices/relay_light.yaml
-    vars: {dev_id: hutch, dev_name: Hutch, dev_addr: "0x0A", dev_icon: "mdi:cupboard-outline"}
+    vars: {dev_id: hutch, dev_name: Hutch, dev_func: 900, dev_inst: 0, dev_icon: "mdi:cupboard-outline"}
   island: !include
     file: ../devices/relay_light.yaml
-    vars: {dev_id: island, dev_name: Island Toe Kick, dev_addr: "0xFB", dev_icon: "mdi:led-strip"}
+    vars: {dev_id: island, dev_name: Island Toe Kick, dev_func: 901, dev_inst: 0, dev_icon: "mdi:led-strip"}
   scare: !include
     file: ../devices/relay_light.yaml
-    vars: {dev_id: scare, dev_name: Scare, dev_addr: "0xF4", dev_icon: "mdi:car-light-high"}
+    vars: {dev_id: scare, dev_name: Scare, dev_func: 902, dev_inst: 0, dev_icon: "mdi:car-light-high"}
   underbody: !include
     file: ../devices/relay_light.yaml
-    vars: {dev_id: underbody, dev_name: Underbody Accent, dev_addr: "0x73", dev_icon: "mdi:led-strip-variant"}
+    vars: {dev_id: underbody, dev_name: Underbody Accent, dev_func: 903, dev_inst: 0, dev_icon: "mdi:led-strip-variant"}
 
   # ---- Switches ----------------------------------------------------
   water_pump: !include
     file: ../devices/relay_switch.yaml
-    vars: {dev_id: water_pump, dev_name: Water Pump, dev_addr: "0x21", dev_icon: "mdi:water-pump", dev_class: running}
+    vars: {dev_id: water_pump, dev_name: Water Pump, dev_func: 5, dev_inst: 0, dev_icon: "mdi:water-pump", dev_class: running}
   tank_heater: !include
     file: ../devices/relay_switch.yaml
-    vars: {dev_id: tank_heater, dev_name: Tank Heater, dev_addr: "0xF2", dev_icon: "mdi:heating-coil", dev_class: heat}
+    vars: {dev_id: tank_heater, dev_name: Tank Heater, dev_func: 270, dev_inst: 0, dev_icon: "mdi:heating-coil", dev_class: heat}
 
   # ---- Tanks -------------------------------------------------------
   tank_fresh: !include
     file: ../devices/tank.yaml
-    vars: {dev_id: tank_fresh, dev_name: Fresh Tank, dev_addr: "0xEC", dev_icon: "mdi:cup-water"}
+    vars: {dev_id: tank_fresh, dev_name: Fresh Tank, dev_func: 67, dev_inst: 0, dev_icon: "mdi:cup-water"}
   tank_grey_1: !include
     file: ../devices/tank.yaml
-    vars: {dev_id: tank_grey_1, dev_name: Grey Tank 1, dev_addr: "0xFA", dev_icon: "mdi:dishwasher"}
+    vars: {dev_id: tank_grey_1, dev_name: Grey Tank 1, dev_func: 68, dev_inst: 1, dev_icon: "mdi:dishwasher"}
   tank_grey_2: !include
     file: ../devices/tank.yaml
-    vars: {dev_id: tank_grey_2, dev_name: Grey Tank 2, dev_addr: "0x31", dev_icon: "mdi:dishwasher"}
+    vars: {dev_id: tank_grey_2, dev_name: Grey Tank 2, dev_func: 68, dev_inst: 2, dev_icon: "mdi:dishwasher"}
   tank_grey_3: !include
     file: ../devices/tank.yaml
-    vars: {dev_id: tank_grey_3, dev_name: Grey Tank 3, dev_addr: "0x23", dev_icon: "mdi:dishwasher"}
+    vars: {dev_id: tank_grey_3, dev_name: Grey Tank 3, dev_func: 68, dev_inst: 3, dev_icon: "mdi:dishwasher"}
   tank_black: !include
     file: ../devices/tank.yaml
-    vars: {dev_id: tank_black, dev_name: Black Tank, dev_addr: "0xCD", dev_icon: "mdi:toilet"}
+    vars: {dev_id: tank_black, dev_name: Black Tank, dev_func: 69, dev_inst: 0, dev_icon: "mdi:toilet"}

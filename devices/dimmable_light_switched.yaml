@@ -1,23 +1,41 @@
 # One OneControl DIMMABLE_LIGHT node whose FIXTURE cannot dim.
 #
-#   vars: dev_id / dev_name / dev_addr / dev_icon, as relay_light.yaml
+#   vars: dev_id / dev_name / dev_func / dev_inst / dev_icon, as relay_light.yaml
 #
 # The awkward middle case, and a real one. DEVICE_TYPE 20 DIMMABLE_LIGHT
 # describes the DRIVER. On the coach this was built from, the Soffit driver
 # accepts brightness happily and the fixture strobes on anything below full.
 # So the entity is on/off, with no slider to drag, but the commands on the
 # wire are still the dimmable form the node expects: an 8-byte payload, not
-# the empty-payload form a latching relay takes. Put such a fixture on
-# relay_light.yaml instead and it stops responding altogether, because the
-# node silently discards a command in the wrong form.
+# the empty-payload form a latching relay takes. relay_light.yaml would not
+# even bind to it, since it accepts relays only, and in v1, which had no such
+# check, the node silently discarded every command in the wrong form.
 #
 # The level sensor is kept as a diagnostic. It is how you find out that a
 # fixture does not really dim, and it is how the next person will.
 substitutions:
   dev_id: unset
   dev_name: unset
-  dev_addr: unset
+  dev_func: unset
+  dev_inst: unset
   dev_icon: "mdi:lightbulb"
+
+globals:
+  # Current address: -1 while unbound, -2 while ambiguous. Neither matches a
+  # real frame, so an unbound device hears nothing and sends nothing.
+  - id: ${dev_id}_addr
+    type: int
+    restore_value: no
+    initial_value: '-1'
+
+# Find this node by what it is, not where it was. Only a DIMMABLE_LIGHT can
+# match.
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          id(oc_bind)("${dev_name}", 1ull << 20, ${dev_func}, ${dev_inst},
+                      id(${dev_id}_addr));
 
 light:
   - platform: binary
@@ -37,7 +55,12 @@ output:
           // dimmer = true, unlike relay_light.yaml. This node speaks the
           // 8-byte dimmable payload even though we only ever send it on or
           // off. The relay form would be discarded.
-          id(light_cmd)->execute(${dev_addr}, state, true, 100);
+          int a = id(${dev_id}_addr);
+          if (a < 0) {
+            ESP_LOGW("oc", "${dev_name}: no node bound, command not sent");
+            return;
+          }
+          id(light_cmd)->execute(a, (int) id(oc_key)[a], state, true, 100);
 
 binary_sensor:
   - platform: template
@@ -78,7 +101,7 @@ canbus:
         use_extended_id: false
         then:
           - lambda: |-
-              if ((can_id & 0xFF) != ${dev_addr}) return;
+              if ((can_id & 0xFF) != id(${dev_id}_addr)) return;
               if (x.empty()) return;
               id(${dev_id}_state).publish_state(x[0] != 0);
               if (x.size() > 1) id(${dev_id}_level).publish_state(x[1]);
@@ -88,7 +111,7 @@ canbus:
         use_extended_id: true
         then:
           - lambda: |-
-              if (((can_id >> 8) & 0xFF) != ${dev_addr}) return;
+              if (((can_id >> 8) & 0xFF) != id(${dev_id}_addr)) return;
               if (x.empty()) return;
               id(${dev_id}_state).publish_state(x[0] != 0);
               if (x.size() > 1) id(${dev_id}_level).publish_state(x[1]);

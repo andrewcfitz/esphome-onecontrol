@@ -46,21 +46,27 @@ deliberate.
 
 Three things keep it safe:
 
-**It only addresses nodes you name.** Every command is aimed at a specific node
-address that you wrote into your own config. There is no broadcast, no
-scan-and-poke, no "turn everything off". If you do not list your slide, nothing
-in here will ever send it a frame.
+**It only addresses nodes you name.** Every command is aimed at one node that
+you described in your own config, by what that node announces itself as. There
+is no broadcast, no scan-and-poke, no "turn everything off". If you do not list
+your slide, nothing in here will ever send it a frame.
 
 **It does not hold anything open.** A command opens a session with one node,
 sends one command, and closes the session immediately. The OneControl phone app
 is never locked out and nothing on the bus is left waiting on this board.
 
-**Node addresses are per-coach.** They are assigned by the system, not by model
-year. The address that is a kitchen light on my coach could be something else
-entirely on yours. So run discovery on your own bus and use what it tells you.
-Do not copy addresses out of my example file, out of a forum post, or out of
-anybody else's config. That is the easiest way to point a command somewhere you
-did not intend.
+**Nothing is configured by address.** Addresses are assigned by the system at
+power-up, and they do not survive a full power loss: on the coach this was
+built on, a dead house battery moved 15 of the 17 configured nodes. So you do
+not write addresses down. Each device is named by its `FUNCTION_NAME` and
+function instance, which the node broadcasts about itself and which do not
+change, and the board finds where that node is right now. That is how the
+OneControl panel does it too.
+
+Each device file also fixes the `DEVICE_TYPE` it will accept. A relay file only
+binds to a latching relay and a light file only to a dimmable light, so no
+combination of vars can point one at a motor. If two nodes announce the same
+identity at once, the device is refused, not guessed at, and the log says so.
 
 ### Why there are no motor controls
 
@@ -80,22 +86,20 @@ deliberately not published them.
 Nothing here targets a motor. There is one command path, in `core.yaml`, and it
 sends either a light command or a relay on or off. The motor device type appears
 in exactly one YAML file, `discover.yaml`, in a lookup table whose only job is to
-tell you which addresses to leave alone.
+tell you which nodes to leave alone.
 
 **That is not the same as saying this package cannot move anything.** A relay ON
 is an empty payload with `1` in the message-data byte of the CAN ID. A momentary
 H-bridge motor reads exactly that frame as FORWARD. The motor classes derive from
 the relay class and inherit its command convention unchanged, so there is no
-discriminator on the wire and there is none in this code either. The only thing
-standing between you and a moving slide is the hex string you typed into
-`dev_addr`.
+discriminator on the wire. The discriminator is in the binding: each device
+file checks a node's `DEVICE_TYPE` before it will talk to it at all. In v1 the
+only safeguard was a hex string you typed into `dev_addr`, and a power cut was
+enough to make that string point somewhere else. Do not add lambdas of your own
+that send to a raw address, for the same reason.
 
-So: check every address against `discover.yaml`'s output. Do not guess one, do
-not copy one, and do not assume an address that produced no visible effect is
-harmless.
-
-If it happens, the damage is limited but not by design. The command path opens a
-session, sends, and closes, and ending the session is itself a stop on a
+If it ever happens, the damage is limited but not by design. The command path
+opens a session, sends, and closes, and ending the session is itself a stop on a
 momentary H-bridge, so the motor moves for a few tens of milliseconds. Repeated
 toggles ratchet it further each time. Treat that as a description of the failure
 mode, not as a safety feature. It is neither guaranteed by this code nor
@@ -223,8 +227,8 @@ nothing works. Do that before you start suspecting the software.
 
 ## 5. Getting it running
 
-The order matters, because you cannot write your device list until you know your
-own node addresses.
+The order matters, because you cannot write your device list until you know what
+your own nodes call themselves.
 
 **1. Install ESPHome.** The Home Assistant add-on, the CLI, whichever you
 prefer. The ESPHome docs cover this better than I can.
@@ -237,39 +241,47 @@ matches your hardware, flash over USB. It includes `discover.yaml` and no
 devices, so it cannot command anything. It only listens.
 
 **4. Read the log.** Run `esphome logs your-node.yaml` and watch for lines tagged
-`oc.discover`. Every node broadcasts its own identity once a second, and you get
-one line per node:
+`oc.discover`. Every node broadcasts its own identity, nominally once a second and
+in practice sometimes only every 15 or so, and you get one line per node:
 
 ```
-[oc.discover] node 0x21  LATCHING_RELAY(3)  WATER_PUMP(5)  instance 0
-[oc.discover] node 0xEC  TANK_SENSOR(10)  FRESH_TANK(67)  instance 0
-[oc.discover] node 0x95  DIMMABLE_LIGHT(20)  KITCHEN_PENDANTS_LIGHT(34)  instance 0
-[oc.discover] node 0xBC  DIMMABLE_LIGHT(20)  SOFFIT_LIGHT(366)  instance 0
+[oc.discover] node 0x21  LATCHING_RELAY(3)  WATER_PUMP(5)  instance 0  ->  dev_func: 5, dev_inst: 0
+[oc.discover] node 0xEC  TANK_SENSOR(10)  FRESH_TANK(67)  instance 0  ->  dev_func: 67, dev_inst: 0
+[oc.discover] node 0x95  DIMMABLE_LIGHT(20)  KITCHEN_PENDANTS_LIGHT(34)  instance 0  ->  dev_func: 34, dev_inst: 0
+[oc.discover] node 0xBC  DIMMABLE_LIGHT(20)  SOFFIT_LIGHT(366)  instance 0  ->  dev_func: 366, dev_inst: 0
 ```
+
+The part after the arrow goes in your device's `vars`. The address is there to
+help you read the log and nothing else: it will be different after the next
+power cut.
 
 A full coach has something like 36 nodes. It reports the motors too, which is
-deliberate: knowing your slide is at `0x3E` is how you know not to point anything
-at it. A type or function the lookup table has no label for prints as `UNKNOWN`
+deliberate: it is a complete inventory, and the motors are part of it. A type or function the lookup table has no label for prints as `UNKNOWN`
 with its raw number beside it, so you can look it up or report it. A node is
 worth having whether or not this project knows its name.
 
 Nodes that broadcast no function name at all are skipped rather than printed as
-noise, so your lights will not all be in that list. Those you find the hard way:
-toggle one from the phone app, watch which address changes, write it down. That
-is the only sanctioned alternative to discovery. It is not permission to guess.
+noise. Those cannot be used in v2: with no function name there is nothing stable
+to find them by. If a device you want is one of them, open an issue with its
+discovery details rather than reaching for an address.
 
 **If discovery prints a node at `0xA0`, stop and open an issue.** That is the
 source address this package transmits as, and it is fixed: `0xA0` is baked into
 the frame IDs it sends and into the receive filters that decide which replies
 are ours, in both `core.yaml` and `battery.yaml`. There is no substitution for
-it, so a consumer pinning `ref: v1` cannot change it. Sharing it with a real node
+it, so a consumer pinning a release cannot change it. Sharing it with a real node
 means your board is impersonating that node: sessions get attributed to the wrong
 device, and lights intermittently do not respond with nothing in the log to say
 why. The coach this was built on had `0xA0` free. Yours might not.
 
 **5. Write your device list.** One entry per device in the `files:` list,
 picking the right file from section 6. `examples/coach.yaml` shows a complete
-one. Its addresses are one specific coach's and will not be yours.
+one. Function names and instances travel better between coaches than addresses
+did, but they are still one coach's, so check every one against your own log.
+
+On boot each device logs the node it found, `[oc] Water Pump is node 0x21`,
+usually within 20 seconds. One that never does is named wrongly or is on the
+wrong device file. Section 8.
 
 **6. Comment out `discover.yaml` and flash again.** It costs a couple of KB of
 flash and some log noise at boot. No harm in leaving it, no point either once
@@ -277,7 +289,7 @@ you have your list.
 
 ### Pin the version
 
-Both examples use `ref: v1.2`. Keep it that way. Tracking `main` means an OTA
+Both examples use `ref: v2.0`. Keep it that way. Tracking `main` means an OTA
 update can change what your lights do at a moment you did not choose, which is a
 poor property in a vehicle. Bump the ref deliberately, when you feel like reading
 a changelog.
@@ -286,11 +298,24 @@ a changelog.
 packages:
   onecontrol:
     url: https://github.com/andrewcfitz/esphome-onecontrol
-    ref: v1.2
+    ref: v2.0
     files:
       - boards/waveshare-esp32-s3-rs485-can.yaml
       - core.yaml
 ```
+
+### Upgrading from v1
+
+v2 drops `dev_addr`. Every device entry needs `dev_func` and `dev_inst` instead,
+which discovery now prints ready to paste. Include `discover.yaml` once, read
+off each device's pair, and replace the address. Nothing else in your device
+list changes, and entity ids and names stay the same, so Home Assistant keeps
+its history.
+
+If you added lambdas of your own that send to a fixed address, they have the
+same problem v1 did. `id(oc_resolve)(1ull << DEVICE_TYPE, FUNCTION_NAME,
+instance)` returns the node's current address, -1 for none, or -2 if it is
+ambiguous. Send nothing if it is negative.
 
 ### If you add your own `on_boot`
 
@@ -322,16 +347,20 @@ of them take:
 |---|---|
 | `dev_id` | ESPHome id prefix, e.g. `hutch`. Lowercase, no spaces. |
 | `dev_name` | Home Assistant name, e.g. `Hutch`. |
-| `dev_addr` | Node address as a quoted hex string, e.g. `"0x0A"`. |
+| `dev_func` | The node's `FUNCTION_NAME` number, e.g. `5` for a water pump. |
+| `dev_inst` | Its function instance, e.g. `2` for the second awning light. |
 | `dev_icon` | An `mdi:` icon. |
 
-Find `dev_addr` with `discover.yaml`. Do not guess it: a relay command and a
-motor's FORWARD command are the same frame, so a wrong address is not
-necessarily a harmless one. See section 2.
+Take `dev_func` and `dev_inst` from `discover.yaml`, which prints both. The
+`DEVICE_TYPE` is not a var: each file fixes the type it accepts, so a node of
+the wrong class is never bound, whatever its function name.
 
-Discovery does not list nodes that broadcast no function name, so a device you
-own may be missing from the log. That is a known gap, not a fault. Find those by
-toggling one from the phone app and watching which address changes.
+A device that is not bound neither sends nor listens. Its entities stay unknown
+and a command logs a warning instead of reaching the bus. Binding takes up to
+about 20 seconds after boot, because some nodes announce themselves that rarely.
+
+Discovery does not list nodes that broadcast no function name, and v2 cannot
+bind them. See section 5.
 
 ### Which light file
 
@@ -367,9 +396,10 @@ with no slider, while still speaking the dimmable command form its node expects.
 
 ### `devices/dimmable_light.yaml`
 
-A `DIMMABLE_LIGHT` node whose fixture really dims.
+A `DIMMABLE_LIGHT` node whose fixture really dims. Binds only to
+`DIMMABLE_LIGHT`.
 
-Vars: `dev_id`, `dev_name`, `dev_addr`, `dev_icon`.
+Vars: `dev_id`, `dev_name`, `dev_func`, `dev_inst`, `dev_icon`.
 
 Entities:
 
@@ -387,9 +417,10 @@ comments in the file give the reasoning.
 
 ### `devices/dimmable_light_switched.yaml`
 
-A `DIMMABLE_LIGHT` node whose fixture does not dim.
+A `DIMMABLE_LIGHT` node whose fixture does not dim. Binds only to
+`DIMMABLE_LIGHT`.
 
-Vars: `dev_id`, `dev_name`, `dev_addr`, `dev_icon`.
+Vars: `dev_id`, `dev_name`, `dev_func`, `dev_inst`, `dev_icon`.
 
 Entities:
 
@@ -403,9 +434,10 @@ Commands go out in the dimmable 8-byte form, always at level 100.
 
 ### `devices/relay_light.yaml`
 
-A light on a `LATCHING_RELAY` node.
+A light on a `LATCHING_RELAY` node. Binds only to `LATCHING_RELAY` or
+`LATCHING_RELAY_TYPE_2`.
 
-Vars: `dev_id`, `dev_name`, `dev_addr`, `dev_icon`.
+Vars: `dev_id`, `dev_name`, `dev_func`, `dev_inst`, `dev_icon`.
 
 Entities:
 
@@ -420,9 +452,9 @@ Home Assistant within milliseconds rather than at the next 1 Hz report.
 ### `devices/relay_switch.yaml`
 
 A `LATCHING_RELAY` node that is not a light: water pump, tank heater, and
-anything similar.
+anything similar. Binds only to `LATCHING_RELAY` or `LATCHING_RELAY_TYPE_2`.
 
-Vars: `dev_id`, `dev_name`, `dev_addr`, `dev_icon`, plus:
+Vars: `dev_id`, `dev_name`, `dev_func`, `dev_inst`, `dev_icon`, plus:
 
 | Var | Meaning |
 |---|---|
@@ -438,9 +470,9 @@ unreported pump is not a pump that is off, it is a pump you have not heard from.
 
 ### `devices/tank.yaml`
 
-One tank level sensor.
+One tank level sensor. Binds only to `TANK_SENSOR`.
 
-Vars: `dev_id`, `dev_name`, `dev_addr`, `dev_icon`.
+Vars: `dev_id`, `dev_name`, `dev_func`, `dev_inst`, `dev_icon`.
 
 Entities:
 
@@ -462,17 +494,18 @@ Entities:
 - **Battery Voltage**, a voltage sensor in V.
 
 Voltage is not broadcast by anything, so this asks for it every 30 seconds. It
-polls three candidate addresses (`0xD1` chassis info, `0xCF` generator, `0x72`
-leveler) and prefers them in that order, so the reading sticks to one source
-instead of alternating between them. Those are the addresses on the coach this
-was built on. Yours may differ, or you may have none of the three, in which case
-the sensor stays unknown and nothing else breaks. Implausible readings are logged
+asks whichever chassis info, generator and leveler modules are on the bus,
+found by `DEVICE_TYPE` with nothing to configure, and prefers them in that
+order, so the reading sticks to one source instead of alternating between them.
+With none of the three present the sensor stays unknown and nothing else
+breaks. Implausible readings are logged
 and discarded rather than published, because a believable wrong number is worse
 than a gap.
 
 ### `discover.yaml`
 
-Include it to find your addresses, remove it when you are done. It creates no
+Include it to find your devices' `dev_func` and `dev_inst`, remove it when you
+are done. It creates no
 entities, only `oc.discover` log lines. See section 5.
 
 ## 7. How the protocol was worked out
@@ -525,12 +558,20 @@ rough order of likelihood:
 Frames are arriving, since you saw `oc.discover` lines, but one device never
 reports.
 
-- **Wrong address.** Check what you wrote against what discovery actually said.
-  Do not use an address from someone else's config.
+- **Never bound.** Look for `[oc] <name> is node 0x..` in the log. If it never
+  appears, `dev_func` or `dev_inst` does not match anything on the bus, or the
+  node is a different `DEVICE_TYPE` from the one the file accepts. Check both
+  against discovery.
+- **Refused as ambiguous.** `[oc] <name>: more than one node announces...` means
+  two nodes claim the same function and instance. If this board stayed powered
+  while the coach reshuffled, it clears within a minute as the old address ages
+  out. If it persists, two of your nodes really do share an identity; open an
+  issue.
 - **The node is not present.** Not every coach has every device. A tank heater
   you do not have will never report.
-- **It has not spoken yet.** Nodes report at 1 Hz, so give it a few seconds after
-  boot. Longer than that means one of the above.
+- **It has not spoken yet.** Status arrives once a second, but a node can take
+  up to about 20 seconds to announce who it is, and nothing is believed before
+  that. Longer than that means one of the above.
 
 "Unknown" here is deliberate. Nothing guesses a default state, because a pump
 reported as off before anything has said so is a guess dressed up as a reading.
@@ -541,16 +582,19 @@ The fixture cannot dim, whatever its `DEVICE_TYPE` says. Move it from
 `dimmable_light.yaml` to `dimmable_light_switched.yaml` and it becomes a clean
 on/off entity that still speaks the command form its node expects. See section 6.
 
-### A light does not respond at all, though its State sensor works
+### A light never binds, though discovery lists it
 
-Wrong device file. You are sending the relay command form to a dimmable node or
-the dimmable form to a relay, and the node is discarding it without a word. Check
-discovery's output for that address: `LATCHING_RELAY` means `relay_light.yaml`,
-`DIMMABLE_LIGHT` means one of the two dimmable files. Section 6 has the table.
+Wrong device file. Each file binds only to the `DEVICE_TYPE` whose command form
+it speaks, so a relay file pointed at a dimmable node, or the reverse, never
+binds at all. In v1 this showed up as a light that reported state and ignored
+commands; now it fails earlier and says less. Check discovery's output for that
+node: `LATCHING_RELAY` means `relay_light.yaml`, `DIMMABLE_LIGHT` means one of
+the two dimmable files. Section 6 has the table.
 
 ### Commands ignored
 
-- **The address is not the device you think it is.** Re-run discovery.
+- **It is not bound.** A command to an unbound device logs `no node bound,
+  command not sent`. See "Entities stay unknown" above.
 - **The node is fault-latched.** A relay that has latched out on a fault stops
   accepting commands until the latch is cleared. The OneControl app or a power
   cycle will do it.

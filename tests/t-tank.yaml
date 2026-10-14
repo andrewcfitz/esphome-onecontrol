@@ -6,7 +6,7 @@ packages:
   core: !include ../core.yaml
   fresh: !include
     file: ../devices/tank.yaml
-    vars: {dev_id: tank_fresh, dev_name: Fresh Tank, dev_addr: "0xEC", dev_icon: "mdi:cup-water"}
+    vars: {dev_id: tank_fresh, dev_name: Fresh Tank, dev_func: 67, dev_inst: 0, dev_icon: "mdi:cup-water"}
   black: !include
     file: ../devices/tank.yaml
-    vars: {dev_id: tank_black, dev_name: Black Tank, dev_addr: "0xCD", dev_icon: "mdi:toilet"}
+    vars: {dev_id: tank_black, dev_name: Black Tank, dev_func: 69, dev_inst: 0, dev_icon: "mdi:toilet"}

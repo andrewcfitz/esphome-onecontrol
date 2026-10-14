@@ -2,27 +2,45 @@
 #
 #   vars: dev_id    ESPHome id prefix, e.g. hutch
 #         dev_name  Home Assistant name, e.g. Hutch
-#         dev_addr  node address as hex, e.g. "0x0A"
+#         dev_func  the node's FUNCTION_NAME number
+#         dev_inst  its function instance
 #         dev_icon  mdi icon
 #
-# Find dev_addr by including discover.yaml and reading the log. Do not guess:
-# a MOMENTARY_H_BRIDGE_TYPE_2 or MOMENTARY_RELAY_TYPE_2 node derives from the
-# relay class and accepts the identical command frame, an empty payload with the
-# command in the message data byte of the ID. Point this file at one of those by
-# mistake and it does not fail, it drives a slide or an awning.
+# Take dev_func and dev_inst from discover.yaml, which prints both. They are
+# what the node says it is, and unlike its address they survive a power cut.
 #
-# Note that discover.yaml only logs nodes that broadcast a function name. A
-# light that does not appear there is found by toggling it from the phone app
-# and watching which address changes, not by guessing.
+# Binds only to LATCHING_RELAY or LATCHING_RELAY_TYPE_2. That restriction is
+# the safety: a MOMENTARY_H_BRIDGE_TYPE_2 or MOMENTARY_RELAY_TYPE_2 node derives
+# from the relay class and accepts the identical command frame, an empty payload
+# with the command in the message data byte of the ID. Sent to one of those, it
+# does not fail, it drives a slide or an awning.
 #
-# Use this and not dimmable_light.yaml for any fixture that does not really
-# dim, whatever its DEVICE_TYPE says. DIMMABLE_LIGHT describes the DRIVER.
-# A fixture that strobes on anything below full belongs here.
+# A DIMMABLE_LIGHT whose fixture strobes when dimmed does not belong here, and
+# would never bind here. Use dimmable_light_switched.yaml.
 substitutions:
   dev_id: unset
   dev_name: unset
-  dev_addr: unset
+  dev_func: unset
+  dev_inst: unset
   dev_icon: "mdi:lightbulb"
+
+globals:
+  # Current address: -1 while unbound, -2 while ambiguous. Neither matches a
+  # real frame, so an unbound device hears nothing and sends nothing.
+  - id: ${dev_id}_addr
+    type: int
+    restore_value: no
+    initial_value: '-1'
+
+# Find this node by what it is, not where it was. Only a LATCHING_RELAY or
+# LATCHING_RELAY_TYPE_2 can match, so this file cannot bind to a motor node
+# however the vars are written.
+interval:
+  - interval: 1s
+    then:
+      - lambda: |-
+          id(oc_bind)("${dev_name}", (1ull << 3) | (1ull << 30), ${dev_func}, ${dev_inst},
+                      id(${dev_id}_addr));
 
 light:
   # NOT optimistic: state comes from what the node reports, so a rejected
@@ -48,7 +66,12 @@ output:
     write_action:
       - lambda: |-
           if (!id(light_ready) || id(light_sync)) return;
-          id(light_cmd)->execute(${dev_addr}, state, false, 100);
+          int a = id(${dev_id}_addr);
+          if (a < 0) {
+            ESP_LOGW("oc", "${dev_name}: no node bound, command not sent");
+            return;
+          }
+          id(light_cmd)->execute(a, (int) id(oc_key)[a], state, false, 100);
 
 binary_sensor:
   # The ground truth, and what makes the light entity honest rather than
@@ -82,7 +105,7 @@ canbus:
         use_extended_id: false
         then:
           - lambda: |-
-              if ((can_id & 0xFF) != ${dev_addr}) return;
+              if ((can_id & 0xFF) != id(${dev_id}_addr)) return;
               if (x.empty()) return;
               id(${dev_id}_state).publish_state((x[0] & 0x0F) == 1);
 
@@ -97,5 +120,5 @@ canbus:
         use_extended_id: true
         then:
           - lambda: |-
-              if (((can_id >> 8) & 0xFF) != ${dev_addr}) return;
+              if (((can_id >> 8) & 0xFF) != id(${dev_id}_addr)) return;
               id(${dev_id}_state).publish_state((can_id & 0xFF) == 1);

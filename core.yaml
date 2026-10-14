@@ -28,11 +28,68 @@
 #
 # The important bit: a device only obeys a COMMAND from the client holding an
 # open REMOTE_CONTROL session. A replayed command frame does nothing at all.
+#
+# ADDRESSES ARE NOT STABLE. A full power loss on the coach reassigns them: on
+# the coach this was built on, 15 of 17 configured nodes came back somewhere
+# else. So nothing in this package is configured by address. Each device file
+# names what the node IS (FUNCTION_NAME plus function instance, from its own
+# DEVICE_ID broadcast, with the DEVICE_TYPE fixed by the file) and finds the
+# current address at runtime, the way the OneControl panel does. See
+# oc_resolve below.
 # ===========================================================================
 
 esphome:
   min_version: 2025.3.0
   on_boot:
+    # Before anything can call it. Device intervals first fire a second after
+    # setup, and light outputs are held off for 10s, so this is comfortably
+    # first. A lambda in a lambda because globals' initial_value is pasted in
+    # raw, without the id() rewriting a lambda gets.
+    - priority: 800
+      then:
+        - lambda: |-
+            // Address of the one live node whose DEVICE_ID matches, or -1 for
+            // none, or -2 for more than one. Both negative so that neither can
+            // ever equal a real address, 0x00 included. More than one is
+            // refused rather than picked from: two nodes claiming one identity
+            // is exactly when commanding either is a guess.
+            //   types  bitmask of acceptable DEVICE_TYPEs (bit n = type n)
+            //   fn     FUNCTION_NAME, or -1 for any
+            //   inst   function instance, or -1 for any
+            id(oc_resolve) = [](uint64_t types, int fn, int inst) -> int {
+              const auto &key = id(oc_key);
+              const auto &seen = id(oc_seen);
+              uint32_t now = millis();
+              int found = -1;
+              for (int a = 0; a < 256; a++) {
+                uint32_t k = key[a];
+                if (k == 0 || now - seen[a] > 60000) continue;
+                uint8_t t = k >> 24;
+                if (t >= 64 || !((types >> t) & 1)) continue;
+                if (fn >= 0 && (int) ((k >> 8) & 0xFFFF) != fn) continue;
+                if (inst >= 0 && (int) (k & 0xFF) != inst) continue;
+                if (found >= 0) return -2;
+                found = a;
+              }
+              return found;
+            };
+
+            // Re-resolve one device and log only the transitions, so a steady
+            // binding is silent and a move, a loss or a clash says so once.
+            id(oc_bind) = [](const char *name, uint64_t types, int fn, int inst,
+                             int &addr) {
+              int a = id(oc_resolve)(types, fn, inst);
+              if (a == addr) return;
+              if (a >= 0) {
+                ESP_LOGI("oc", "%s is node 0x%02X", name, (unsigned) a);
+              } else if (a == -2) {
+                ESP_LOGE("oc", "%s: more than one node announces function %d "
+                         "instance %d, refusing to command either", name, fn, inst);
+              } else if (addr >= 0) {
+                ESP_LOGW("oc", "%s: node no longer announced, unbound", name);
+              }
+              addr = a;
+            };
     - priority: -100
       then:
         # Let the bus settle before the light entities may transmit. An
@@ -46,6 +103,32 @@ esphome:
             value: 'true'
 
 globals:
+  # Who is where, rebuilt continuously from DEVICE_ID broadcasts. Indexed by
+  # address. Key is DEVICE_TYPE << 24 | FUNCTION_NAME << 8 | function instance,
+  # 0 for never heard. oc_seen is millis() of the last announcement, so an
+  # address that falls silent stops matching anything after 60s.
+  #
+  # Why 60s: DEVICE_ID is nominally once a second but measured very uneven,
+  # with gaps of 10-18s between one node's broadcasts common in a 40s capture.
+  # The cost shows on a reshuffle with this board still powered: the old
+  # address keeps its identity until it ages out, the new one announces the
+  # same identity alongside it, and the device is refused as ambiguous for up
+  # to a minute. Refused, not misdirected.
+  - id: oc_key
+    type: std::array<uint32_t, 256>
+    restore_value: no
+  - id: oc_seen
+    type: std::array<uint32_t, 256>
+    restore_value: no
+  - id: oc_resolve
+    type: int (*)(uint64_t, int, int)
+    restore_value: no
+    initial_value: 'nullptr'
+  - id: oc_bind
+    type: void (*)(const char *, uint64_t, int, int, int &)
+    restore_value: no
+    initial_value: 'nullptr'
+
   # The command currently in flight. The session handshake takes three round
   # trips, so what we are trying to do has to survive from the button press
   # until the session opens. One slot only: light_cmd is mode: queued, so
@@ -53,7 +136,7 @@ globals:
   - id: cmd_target      # destination node, and the guard for whose reply is whose
     type: int
     restore_value: no
-    initial_value: '0'
+    initial_value: '-1'  # -1, not 0: 0x00 is a valid address
   - id: cmd_on
     type: bool
     restore_value: no
@@ -90,6 +173,21 @@ canbus:
     # mode defaults to NORMAL, not LISTENONLY: we transmit.
 
     on_frame:
+      # ---- Who is where ------------------------------------------------
+      # Every DEVICE_ID broadcast refreshes its address's row. A node that
+      # moves overwrites the row at its new address, and the row at its old
+      # one either ages out or is overwritten by whoever lands there.
+      - can_id: 0x200
+        can_id_mask: 0x700
+        use_extended_id: false
+        then:
+          - lambda: |-
+              if (x.size() < 7) return;
+              uint8_t a = can_id & 0xFF;
+              id(oc_key)[a] = ((uint32_t) x[3] << 24) | ((uint32_t) x[4] << 16) |
+                              ((uint32_t) x[5] << 8) | (x[6] & 0x0F);
+              id(oc_seen)[a] = millis();
+
       # ---- Session handshake -------------------------------------------
       # A device obeys a COMMAND only from the client holding an open
       # REMOTE_CONTROL session (SESSION_ID 4). For destination DD:
@@ -185,16 +283,28 @@ script:
   # The 400ms tail is the queue slot, not a timeout. It has to outlast the
   # handshake without approaching the 5s session timeout. Round trips measure
   # in single-digit milliseconds.
+  #
+  # `ident` is the oc_key row the caller bound `addr` from, and it is checked
+  # again here because a queued command can wait several seconds for its slot.
+  # If that address has since announced itself as something else, the command
+  # is dropped rather than delivered to whatever is there now.
   - id: light_cmd
     mode: queued
     max_runs: 16
     parameters:
       addr: int
+      ident: int
       turn_on: bool
       dimmer: bool
       level: int
     then:
       - lambda: |-
+          if (addr < 0 || addr > 255 || id(oc_key)[addr] != (uint32_t) ident) {
+            ESP_LOGW("oc", "node 0x%02X is no longer the device it was bound as, command dropped",
+                     (unsigned) (addr & 0xFF));
+            id(cmd_target) = -1;
+            return;
+          }
           id(cmd_target) = addr;
           id(cmd_on) = turn_on;
           id(cmd_dimmer) = dimmer;
