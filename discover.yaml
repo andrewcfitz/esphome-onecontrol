@@ -8,8 +8,9 @@
 #   [6]    device instance << 4 | function instance
 #   [7]    capabilities
 #
-# Logged once per node rather than once a second, because 36 devices at 1 Hz
-# is a firehose. THIS IS HOW YOU FIND YOUR dev_func AND dev_inst VALUES. The
+# Logged once per node per minute rather than on every broadcast, because 36
+# devices at 1 Hz is a firehose. Once a minute, not once ever, so that
+# `esphome logs` started after boot still sees the whole inventory. THIS IS HOW YOU FIND YOUR dev_func AND dev_inst VALUES. The
 # addresses it prints are for reading the log only: a power cut reassigns them.
 #
 # The lookup tables below cost a couple of KB of flash, which is why this is
@@ -28,8 +29,15 @@ canbus:
           - lambda: |-
               if (x.size() < 7) return;
               // Logged again if an address starts announcing something else,
-              // which is what a reshuffle looks like from here.
+              // which is what a reshuffle looks like from here. And the whole
+              // inventory again every minute, because a log client that
+              // connects after boot would otherwise see none of it.
               static uint32_t logged[256] = {0};
+              static uint32_t round_start = 0;
+              if (millis() - round_start > 60000) {
+                round_start = millis();
+                for (auto &k : logged) k = 0;
+              }
               uint8_t a = can_id & 0xFF;
               uint8_t dt = x[3];
               uint16_t fn = (x[4] << 8) | x[5];
