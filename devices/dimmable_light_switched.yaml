@@ -28,6 +28,19 @@ globals:
     restore_value: no
     initial_value: '-1'
 
+  # Whether the node last REPORTED itself on. The echo guard, and the same idea
+  # as bus_level_* in dimmable_light.yaml: light_sync alone cannot stop a state
+  # that came from the bus going back out as a command, because the output is
+  # written on a later loop iteration, after the flag has been cleared. Here
+  # that echo was not harmless. A node reports every ~333ms right after a
+  # change, so a report sent just before our command landed echoed back as the
+  # opposite command, and the Soffit flashed on and off until something gave.
+  # A state that matches what the node last said is never sent to it.
+  - id: bus_on_${dev_id}
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
 # Find this node by what it is, not where it was. Only a DIMMABLE_LIGHT can
 # match.
 interval:
@@ -52,6 +65,7 @@ output:
     write_action:
       - lambda: |-
           if (!id(light_ready) || id(light_sync)) return;
+          if (state == id(bus_on_${dev_id})) return;
           // dimmer = true, unlike relay_light.yaml. This node speaks the
           // 8-byte dimmable payload even though we only ever send it on or
           // off. The relay form would be discarded.
@@ -103,6 +117,8 @@ canbus:
           - lambda: |-
               if ((can_id & 0xFF) != id(${dev_id}_addr)) return;
               if (x.empty()) return;
+              // Set before publishing, so no write can see the old value.
+              id(bus_on_${dev_id}) = x[0] != 0;
               id(${dev_id}_state).publish_state(x[0] != 0);
               if (x.size() > 1) id(${dev_id}_level).publish_state(x[1]);
 
@@ -113,5 +129,7 @@ canbus:
           - lambda: |-
               if (((can_id >> 8) & 0xFF) != id(${dev_id}_addr)) return;
               if (x.empty()) return;
+              // Set before publishing, so no write can see the old value.
+              id(bus_on_${dev_id}) = x[0] != 0;
               id(${dev_id}_state).publish_state(x[0] != 0);
               if (x.size() > 1) id(${dev_id}_level).publish_state(x[1]);

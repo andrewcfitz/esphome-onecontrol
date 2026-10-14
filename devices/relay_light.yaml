@@ -32,6 +32,14 @@ globals:
     restore_value: no
     initial_value: '-1'
 
+  # Whether the node last REPORTED itself on. A state that matches it is never
+  # sent, so bus state pushed into the light cannot echo back out as a command.
+  # See dimmable_light_switched.yaml, where that echo made the Soffit flash.
+  - id: bus_on_${dev_id}
+    type: bool
+    restore_value: no
+    initial_value: 'false'
+
 # Find this node by what it is, not where it was. Only a LATCHING_RELAY or
 # LATCHING_RELAY_TYPE_2 can match, so this file cannot bind to a motor node
 # however the vars are written.
@@ -57,15 +65,15 @@ light:
     restore_mode: ALWAYS_OFF
 
 output:
-  # The transmit half. Both guards matter: light_ready blocks the write
-  # ESPHome performs at boot, light_sync blocks the write caused by pushing
-  # bus state into the entity.
+  # The transmit half. light_ready blocks the write ESPHome performs at boot,
+  # bus_on_* blocks the write caused by pushing bus state into the entity.
   - platform: template
     id: ${dev_id}_out
     type: binary
     write_action:
       - lambda: |-
           if (!id(light_ready) || id(light_sync)) return;
+          if (state == id(bus_on_${dev_id})) return;
           int a = id(${dev_id}_addr);
           if (a < 0) {
             ESP_LOGW("oc", "${dev_name}: no node bound, command not sent");
@@ -107,6 +115,7 @@ canbus:
           - lambda: |-
               if ((can_id & 0xFF) != id(${dev_id}_addr)) return;
               if (x.empty()) return;
+              id(bus_on_${dev_id}) = (x[0] & 0x0F) == 1;
               id(${dev_id}_state).publish_state((x[0] & 0x0F) == 1);
 
       # ---- Somebody else commanding this node ---------------------------
@@ -121,4 +130,5 @@ canbus:
         then:
           - lambda: |-
               if (((can_id >> 8) & 0xFF) != id(${dev_id}_addr)) return;
+              id(bus_on_${dev_id}) = (can_id & 0xFF) == 1;
               id(${dev_id}_state).publish_state((can_id & 0xFF) == 1);

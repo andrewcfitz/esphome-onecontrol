@@ -150,10 +150,12 @@ globals:
     restore_value: no
     initial_value: '100'
 
-  # Retained because the relay lights reference it, and harmless there: a
-  # relay's echo is a command identical to the state the node is already in,
-  # so it is idempotent rather than visible. NOT load-bearing. What keeps the
-  # relays quiet is the equality check at the top of each on_state handler.
+  # Retained because the on/off light files still set it. NOT load-bearing,
+  # and it cannot be: the output is written on a later loop iteration, after
+  # the flag is cleared. What actually stops bus state echoing back out as a
+  # command is each file's bus_on_* / bus_level_* comparison. The echo was
+  # once assumed idempotent; it is not when a status report is stale, which
+  # is how the Soffit came to flash on and off.
   - id: light_sync
     type: bool
     restore_value: no
