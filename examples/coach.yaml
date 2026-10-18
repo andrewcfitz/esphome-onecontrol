@@ -45,13 +45,13 @@ packages:
       - path: devices/dimmable_light_switched.yaml
         vars: {dev_id: soffit, dev_name: Soffit, dev_func: 366, dev_inst: 0, dev_icon: "mdi:light-flood-down"}
       - path: devices/relay_light.yaml
-        vars: {dev_id: hutch, dev_name: Hutch, dev_func: FILL_ME, dev_inst: FILL_ME, dev_icon: "mdi:cupboard-outline"}
+        vars: {dev_id: hutch, dev_name: Hutch, dev_func: 121, dev_inst: 0, dev_icon: "mdi:cupboard-outline"}
       - path: devices/relay_light.yaml
-        vars: {dev_id: island, dev_name: Island Toe Kick, dev_func: FILL_ME, dev_inst: FILL_ME, dev_icon: "mdi:led-strip"}
+        vars: {dev_id: island, dev_name: Island Toe Kick, dev_func: 38, dev_inst: 0, dev_icon: "mdi:led-strip"}
       - path: devices/relay_light.yaml
-        vars: {dev_id: scare, dev_name: Scare, dev_func: FILL_ME, dev_inst: FILL_ME, dev_icon: "mdi:car-light-high"}
+        vars: {dev_id: scare, dev_name: Scare, dev_func: 122, dev_inst: 0, dev_icon: "mdi:car-light-high"}
       - path: devices/relay_light.yaml
-        vars: {dev_id: underbody, dev_name: Underbody Accent, dev_func: FILL_ME, dev_inst: FILL_ME, dev_icon: "mdi:led-strip-variant"}
+        vars: {dev_id: underbody, dev_name: Underbody Accent, dev_func: 293, dev_inst: 0, dev_icon: "mdi:led-strip-variant"}
 
       # ---- Switches ----------------------------------------------------
       - path: devices/relay_switch.yaml
@@ -67,10 +67,10 @@ packages:
       - path: devices/tank.yaml
         vars: {dev_id: tank_fresh, dev_name: Fresh Tank, dev_func: 67, dev_inst: 0, dev_icon: "mdi:cup-water"}
       - path: devices/tank.yaml
-        vars: {dev_id: tank_grey_1, dev_name: Grey Tank 1, dev_func: 68, dev_inst: FILL_ME, dev_icon: "mdi:dishwasher"}
+        vars: {dev_id: tank_grey_1, dev_name: Grey Tank 1, dev_func: 68, dev_inst: 1, dev_icon: "mdi:dishwasher"}
       - path: devices/tank.yaml
-        vars: {dev_id: tank_grey_2, dev_name: Grey Tank 2, dev_func: 68, dev_inst: FILL_ME, dev_icon: "mdi:dishwasher"}
+        vars: {dev_id: tank_grey_2, dev_name: Grey Tank 2, dev_func: 68, dev_inst: 2, dev_icon: "mdi:dishwasher"}
       - path: devices/tank.yaml
-        vars: {dev_id: tank_grey_3, dev_name: Grey Tank 3, dev_func: 68, dev_inst: FILL_ME, dev_icon: "mdi:dishwasher"}
+        vars: {dev_id: tank_grey_3, dev_name: Grey Tank 3, dev_func: 68, dev_inst: 3, dev_icon: "mdi:dishwasher"}
       - path: devices/tank.yaml
         vars: {dev_id: tank_black, dev_name: Black Tank, dev_func: 69, dev_inst: 0, dev_icon: "mdi:toilet"}

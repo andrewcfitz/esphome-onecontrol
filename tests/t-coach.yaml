@@ -27,16 +27,16 @@ packages:
     vars: {dev_id: soffit, dev_name: Soffit, dev_func: 366, dev_inst: 0, dev_icon: "mdi:light-flood-down"}
   hutch: !include
     file: ../devices/relay_light.yaml
-    vars: {dev_id: hutch, dev_name: Hutch, dev_func: 900, dev_inst: 0, dev_icon: "mdi:cupboard-outline"}
+    vars: {dev_id: hutch, dev_name: Hutch, dev_func: 121, dev_inst: 0, dev_icon: "mdi:cupboard-outline"}
   island: !include
     file: ../devices/relay_light.yaml
-    vars: {dev_id: island, dev_name: Island Toe Kick, dev_func: 901, dev_inst: 0, dev_icon: "mdi:led-strip"}
+    vars: {dev_id: island, dev_name: Island Toe Kick, dev_func: 38, dev_inst: 0, dev_icon: "mdi:led-strip"}
   scare: !include
     file: ../devices/relay_light.yaml
-    vars: {dev_id: scare, dev_name: Scare, dev_func: 902, dev_inst: 0, dev_icon: "mdi:car-light-high"}
+    vars: {dev_id: scare, dev_name: Scare, dev_func: 122, dev_inst: 0, dev_icon: "mdi:car-light-high"}
   underbody: !include
     file: ../devices/relay_light.yaml
-    vars: {dev_id: underbody, dev_name: Underbody Accent, dev_func: 903, dev_inst: 0, dev_icon: "mdi:led-strip-variant"}
+    vars: {dev_id: underbody, dev_name: Underbody Accent, dev_func: 293, dev_inst: 0, dev_icon: "mdi:led-strip-variant"}
 
   # ---- Switches ----------------------------------------------------
   water_pump: !include
